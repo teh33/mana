@@ -1369,7 +1369,7 @@ pub enum CreateSubcommand {
         #[arg(long)]
         run: bool,
 
-        /// Mark the new unit as an epic instead of a job
+        /// Mark the new unit as an epic instead of a job (--epic)
         #[arg(long)]
         epic: bool,
 
@@ -1471,7 +1471,7 @@ pub struct CreateOpts {
     #[arg(long)]
     pub feature: bool,
 
-    /// Mark the created unit as an epic (non-dispatchable parent/grouping record)
+    /// Mark the created unit as an epic (non-dispatchable parent/grouping record, `--epic`)
     #[arg(long)]
     pub epic: bool,
 

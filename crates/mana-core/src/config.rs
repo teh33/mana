@@ -1057,6 +1057,8 @@ mod tests {
     #[test]
     fn extends_empty_loads_normally() {
         let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("HOME", home.path());
         let mana_dir = dir.path().join(".mana");
         fs::create_dir_all(&mana_dir).unwrap();
         write_local_config(&mana_dir, &[], "");

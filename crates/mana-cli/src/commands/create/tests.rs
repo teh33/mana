@@ -68,7 +68,7 @@ fn create_minimal_unit() {
         on_fail: None,
         pass_ok: true,
         feature: false,
-        epic: true,
+        epic: false,
 
         claim: false,
         by: None,
@@ -414,7 +414,7 @@ fn create_epic_sets_kind_epic() {
         on_fail: None,
         pass_ok: true,
         feature: false,
-        epic: false,
+        epic: true,
 
         claim: false,
         by: None,
