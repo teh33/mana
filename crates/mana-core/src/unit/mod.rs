@@ -291,6 +291,38 @@ fn infer_unit_kind(kind: Option<UnitKind>, unit_type: &str, verify: Option<&str>
     })
 }
 
+impl UnitKind {
+    pub fn is_dispatchable_job(self) -> bool {
+        matches!(self, UnitKind::Job)
+    }
+
+    pub fn is_claimable(self) -> bool {
+        !matches!(self, UnitKind::Fact)
+    }
+
+    pub fn is_epic_like(self, feature: bool) -> bool {
+        feature || matches!(self, UnitKind::Epic)
+    }
+}
+
+impl Unit {
+    pub fn is_dispatchable_job(&self) -> bool {
+        self.kind.is_dispatchable_job() && self.verify.as_ref().is_some_and(|v| !v.trim().is_empty())
+    }
+
+    pub fn is_claimable(&self) -> bool {
+        self.kind.is_claimable()
+    }
+
+    pub fn requires_human_close(&self) -> bool {
+        self.feature
+    }
+
+    pub fn is_epic_like(&self) -> bool {
+        self.kind.is_epic_like(self.feature)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct UnitWire {
     id: String,
@@ -756,6 +788,42 @@ mod tests {
         let restored: Unit = serde_yml::from_str(&yaml).unwrap();
 
         assert_eq!(unit, restored);
+    }
+
+    #[test]
+    fn epic_is_not_dispatchable() {
+        let mut unit = Unit::new("1", "Epic");
+        unit.kind = UnitKind::Epic;
+        unit.verify = Some("cargo test something".to_string());
+
+        assert!(!unit.is_dispatchable_job());
+        assert!(unit.is_claimable());
+        assert!(unit.is_epic_like());
+    }
+
+    #[test]
+    fn job_dispatchability_is_explicit() {
+        let mut unit = Unit::new("2", "Job");
+        unit.kind = UnitKind::Job;
+        unit.verify = Some("cargo test job_dispatchability_is_explicit".to_string());
+
+        assert!(unit.is_dispatchable_job());
+        assert!(unit.is_claimable());
+        assert!(!unit.is_epic_like());
+
+        unit.verify = Some("   ".to_string());
+        assert!(!unit.is_dispatchable_job());
+    }
+
+    #[test]
+    fn feature_semantics_preserve_human_review() {
+        let mut unit = Unit::new("3", "Feature epic");
+        unit.kind = UnitKind::Epic;
+        unit.feature = true;
+
+        assert!(unit.is_epic_like());
+        assert!(unit.requires_human_close());
+        assert!(!unit.is_dispatchable_job());
     }
 
     #[test]
