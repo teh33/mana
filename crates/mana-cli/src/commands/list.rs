@@ -279,6 +279,7 @@ mod tests {
             claimed_by: None,
             attempts: 0,
             paths: vec!["src/test.rs".to_string()],
+            kind: crate::unit::UnitKind::Job,
             feature: false,
             has_decisions: false,
         }

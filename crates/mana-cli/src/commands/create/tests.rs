@@ -69,6 +69,7 @@ fn create_minimal_unit() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -112,6 +113,7 @@ fn create_allows_unit_without_verify_or_acceptance() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -157,6 +159,7 @@ fn create_increments_id() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -185,6 +188,7 @@ fn create_increments_id() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -224,6 +228,7 @@ fn create_with_parent_assigns_child_id() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -252,6 +257,7 @@ fn create_with_parent_assigns_child_id() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -290,6 +296,7 @@ fn create_multiple_children() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -318,6 +325,7 @@ fn create_multiple_children() {
             on_fail: None,
             pass_ok: true,
             feature: false,
+            epic: false,
             claim: false,
             by: None,
             verify_timeout: None,
@@ -362,6 +370,7 @@ fn create_with_all_fields() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -405,7 +414,8 @@ fn create_epic_sets_kind_epic() {
         on_fail: None,
         pass_ok: true,
         feature: false,
-        epic: true,
+        epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -442,6 +452,7 @@ fn create_updates_index() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -511,6 +522,7 @@ fn create_rejects_priority_too_high() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -550,6 +562,7 @@ fn create_accepts_valid_priorities() {
             on_fail: None,
             pass_ok: true,
             feature: false,
+            epic: false,
             claim: false,
             by: None,
             verify_timeout: None,
@@ -602,6 +615,7 @@ fn pre_create_hook_accepts_unit_creation() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -657,6 +671,7 @@ fn pre_create_hook_rejects_unit_creation() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -730,6 +745,7 @@ fn post_create_hook_runs_after_creation() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -788,6 +804,7 @@ fn post_create_hook_failure_does_not_break_creation() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -844,6 +861,7 @@ fn untrusted_hooks_are_silently_skipped() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -889,6 +907,7 @@ fn default_rejects_passing_verify() {
         pass_ok: false, // default: fail-first enforced
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -925,6 +944,7 @@ fn default_accepts_failing_verify() {
         pass_ok: false, // default: fail-first enforced
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -967,6 +987,7 @@ fn pass_ok_skips_fail_first_check() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1009,6 +1030,7 @@ fn no_verify_skips_fail_first_check() {
         pass_ok: false,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1050,6 +1072,7 @@ mod lint {
             on_fail: None,
             pass_ok: true,
             feature: false,
+            epic: false,
             claim: false,
             by: None,
             verify_timeout: None,
@@ -1084,6 +1107,7 @@ mod lint {
             on_fail: None,
             pass_ok: true,
             feature: false,
+            epic: false,
             claim: false,
             by: None,
             verify_timeout: None,
@@ -1117,6 +1141,7 @@ mod lint {
             on_fail: None,
             pass_ok: true,
             feature: false,
+            epic: false,
             claim: false,
             by: None,
             verify_timeout: None,
@@ -1155,6 +1180,7 @@ fn create_with_claim_sets_in_progress() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: true,
         by: Some("agent-1".to_string()),
         verify_timeout: None,
@@ -1197,6 +1223,7 @@ fn create_with_claim_without_by() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: true,
         by: None,
         verify_timeout: None,
@@ -1237,6 +1264,7 @@ fn create_without_claim_stays_open() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1277,6 +1305,7 @@ fn create_with_claim_and_parent() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1304,6 +1333,7 @@ fn create_with_claim_and_parent() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: true,
         by: Some("agent-2".to_string()),
         verify_timeout: None,
@@ -1346,6 +1376,7 @@ fn create_claim_rejects_missing_validation_criteria() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: true,
         by: Some("agent-1".to_string()),
         verify_timeout: None,
@@ -1388,6 +1419,7 @@ fn create_claim_accepts_with_acceptance() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: true,
         by: None,
         verify_timeout: None,
@@ -1421,6 +1453,7 @@ fn create_claim_accepts_with_verify() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: true,
         by: None,
         verify_timeout: None,
@@ -1456,6 +1489,7 @@ fn create_claim_with_parent_exempt_from_validation() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1484,6 +1518,7 @@ fn create_claim_with_parent_exempt_from_validation() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: true,
         by: Some("agent-1".to_string()),
         verify_timeout: None,
@@ -1522,6 +1557,7 @@ fn create_without_claim_exempt_from_validation() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1660,6 +1696,7 @@ fn create_next_depends_on_latest() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1688,6 +1725,7 @@ fn create_next_depends_on_latest() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1731,6 +1769,7 @@ fn create_next_chain_three_units() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1759,6 +1798,7 @@ fn create_next_chain_three_units() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1787,6 +1827,7 @@ fn create_next_chain_three_units() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1836,6 +1877,7 @@ fn create_next_merges_explicit_deps() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1863,6 +1905,7 @@ fn create_next_merges_explicit_deps() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1891,6 +1934,7 @@ fn create_next_merges_explicit_deps() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1935,6 +1979,7 @@ fn create_next_fails_with_no_units() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1978,6 +2023,7 @@ fn create_feature_sets_feature_flag() {
         pass_ok: true,
         feature: true,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -2018,6 +2064,7 @@ fn create_feature_works_without_verify() {
         pass_ok: true,
         feature: true,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,
@@ -2062,6 +2109,7 @@ fn create_without_feature_preserves_existing_behavior() {
         pass_ok: true,
         feature: false,
         epic: false,
+
         claim: false,
         by: None,
         verify_timeout: None,

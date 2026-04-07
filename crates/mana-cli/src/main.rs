@@ -172,6 +172,7 @@ fn main() -> Result<()> {
                 claim,
                 by,
                 run,
+                epic,
                 json,
             }) = subcommand
             {
