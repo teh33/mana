@@ -56,6 +56,7 @@ use crate::error::{ManaError, ManaResult};
 /// Core unit type representing a single work item.
 pub use crate::unit::{
     AttemptOutcome, AttemptRecord, OnCloseAction, OnFailAction, RunRecord, RunResult, Status, Unit,
+    UnitKind,
 };
 
 /// Index types for working with the unit cache.
@@ -126,6 +127,8 @@ pub struct TreeNode {
     pub priority: u8,
     /// Whether the unit has a verify command.
     pub has_verify: bool,
+    /// Explicit schema kind.
+    pub kind: UnitKind,
     /// Child nodes (units whose `parent` field is this unit's ID).
     pub children: Vec<TreeNode>,
 }
@@ -339,6 +342,7 @@ fn build_tree_node(id: &str, index: &Index) -> Result<TreeNode> {
         status: entry.status,
         priority: entry.priority,
         has_verify: entry.has_verify,
+        kind: entry.kind,
         children,
     })
 }

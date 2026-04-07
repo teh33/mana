@@ -3,7 +3,7 @@ use std::fs;
 
 use crate::config::Config;
 use crate::index::Index;
-use crate::unit::{OnFailAction, Status, Unit};
+use crate::unit::{OnFailAction, Status, Unit, UnitKind};
 use tempfile::TempDir;
 
 fn setup_mana_dir_with_config() -> (TempDir, std::path::PathBuf) {
@@ -68,6 +68,7 @@ fn create_minimal_unit() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -110,6 +111,7 @@ fn create_allows_unit_without_verify_or_acceptance() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -154,6 +156,7 @@ fn create_increments_id() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -181,6 +184,7 @@ fn create_increments_id() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -219,6 +223,7 @@ fn create_with_parent_assigns_child_id() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -246,6 +251,7 @@ fn create_with_parent_assigns_child_id() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -283,6 +289,7 @@ fn create_multiple_children() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -354,6 +361,7 @@ fn create_with_all_fields() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -373,6 +381,42 @@ fn create_with_all_fields() {
     assert_eq!(unit.labels, vec!["bug", "critical"]);
     assert_eq!(unit.assignee, Some("alice".to_string()));
     assert_eq!(unit.dependencies, vec!["2", "3"]);
+}
+
+#[test]
+fn create_epic_sets_kind_epic() {
+    let (_dir, mana_dir) = setup_mana_dir_with_config();
+
+    let args = CreateArgs {
+        title: "Epic parent".to_string(),
+        description: Some("Top-level grouping record".to_string()),
+        acceptance: None,
+        notes: None,
+        design: None,
+        verify: None,
+        priority: None,
+        labels: None,
+        assignee: None,
+        deps: None,
+        parent: None,
+        produces: None,
+        requires: None,
+        paths: None,
+        on_fail: None,
+        pass_ok: true,
+        feature: false,
+        epic: true,
+        claim: false,
+        by: None,
+        verify_timeout: None,
+        decisions: Vec::new(),
+        force: false,
+    };
+
+    let id = cmd_create(&mana_dir, args).unwrap();
+    let unit = Unit::from_file(mana_dir.join(format!("{}-epic-parent.md", id))).unwrap();
+    assert_eq!(unit.kind, UnitKind::Epic);
+    assert!(unit.verify.is_none());
 }
 
 #[test]
@@ -397,6 +441,7 @@ fn create_updates_index() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -411,6 +456,7 @@ fn create_updates_index() {
     assert_eq!(index.units.len(), 1);
     assert_eq!(index.units[0].id, "1");
     assert_eq!(index.units[0].title, "Indexed unit");
+    assert_eq!(index.units[0].kind, UnitKind::Epic);
 }
 
 #[test]
@@ -464,6 +510,7 @@ fn create_rejects_priority_too_high() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -554,6 +601,7 @@ fn pre_create_hook_accepts_unit_creation() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -608,6 +656,7 @@ fn pre_create_hook_rejects_unit_creation() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -680,6 +729,7 @@ fn post_create_hook_runs_after_creation() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -737,6 +787,7 @@ fn post_create_hook_failure_does_not_break_creation() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -792,6 +843,7 @@ fn untrusted_hooks_are_silently_skipped() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -836,6 +888,7 @@ fn default_rejects_passing_verify() {
         on_fail: None,
         pass_ok: false, // default: fail-first enforced
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -871,6 +924,7 @@ fn default_accepts_failing_verify() {
         on_fail: None,
         pass_ok: false, // default: fail-first enforced
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -912,6 +966,7 @@ fn pass_ok_skips_fail_first_check() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -953,6 +1008,7 @@ fn no_verify_skips_fail_first_check() {
         on_fail: None,
         pass_ok: false,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1180,6 +1236,7 @@ fn create_without_claim_stays_open() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1219,6 +1276,7 @@ fn create_with_claim_and_parent() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1397,6 +1455,7 @@ fn create_claim_with_parent_exempt_from_validation() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1462,6 +1521,7 @@ fn create_without_claim_exempt_from_validation() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1599,6 +1659,7 @@ fn create_next_depends_on_latest() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1626,6 +1687,7 @@ fn create_next_depends_on_latest() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1668,6 +1730,7 @@ fn create_next_chain_three_units() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1695,6 +1758,7 @@ fn create_next_chain_three_units() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1722,6 +1786,7 @@ fn create_next_chain_three_units() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1770,6 +1835,7 @@ fn create_next_merges_explicit_deps() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1796,6 +1862,7 @@ fn create_next_merges_explicit_deps() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1823,6 +1890,7 @@ fn create_next_merges_explicit_deps() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1866,6 +1934,7 @@ fn create_next_fails_with_no_units() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1908,6 +1977,7 @@ fn create_feature_sets_feature_flag() {
         on_fail: None,
         pass_ok: true,
         feature: true,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1947,6 +2017,7 @@ fn create_feature_works_without_verify() {
         on_fail: None,
         pass_ok: true,
         feature: true,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,
@@ -1990,6 +2061,7 @@ fn create_without_feature_preserves_existing_behavior() {
         on_fail: None,
         pass_ok: true,
         feature: false,
+        epic: false,
         claim: false,
         by: None,
         verify_timeout: None,

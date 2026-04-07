@@ -1369,6 +1369,10 @@ pub enum CreateSubcommand {
         #[arg(long)]
         run: bool,
 
+        /// Mark the new unit as an epic instead of a job
+        #[arg(long)]
+        epic: bool,
+
         /// Output created unit as JSON (for piping)
         #[arg(long)]
         json: bool,
@@ -1466,6 +1470,10 @@ pub struct CreateOpts {
     /// Mark as a product feature (human-only close, no verify gate required)
     #[arg(long)]
     pub feature: bool,
+
+    /// Mark the created unit as an epic (non-dispatchable parent/grouping record)
+    #[arg(long)]
+    pub epic: bool,
 
     /// Launch interactive wizard (prompts for all fields step-by-step)
     #[arg(long, short = 'i')]

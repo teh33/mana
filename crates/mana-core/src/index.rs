@@ -34,7 +34,7 @@ use chrono::{DateTime, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 
-use crate::unit::{Status, Unit};
+use crate::unit::{Status, Unit, UnitKind};
 use crate::util::{atomic_write, natural_cmp};
 
 // ---------------------------------------------------------------------------
@@ -90,6 +90,8 @@ pub struct IndexEntry {
     /// File paths this unit touches (for scope-based blocking)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paths: Vec<String>,
+    /// Explicit schema kind.
+    pub kind: UnitKind,
     /// Whether this unit is a feature (product-level goal, human-only close)
     #[serde(default)]
     pub feature: bool,
@@ -118,6 +120,7 @@ impl From<&Unit> for IndexEntry {
             claimed_by: unit.claimed_by.clone(),
             attempts: unit.attempts,
             paths: unit.paths.clone(),
+            kind: unit.kind,
             feature: unit.feature,
             has_decisions: !unit.decisions.is_empty(),
         }
@@ -687,6 +690,15 @@ mod tests {
         assert_eq!(entry.parent, Some("3".to_string()));
         assert_eq!(entry.dependencies, vec!["1".to_string()]);
         assert_eq!(entry.labels, vec!["backend".to_string()]);
+    }
+
+    #[test]
+    fn index_entry_preserves_kind() {
+        let mut unit = Unit::new("1", "Epic unit");
+        unit.kind = crate::unit::UnitKind::Epic;
+
+        let entry = IndexEntry::from(&unit);
+        assert_eq!(entry.kind, crate::unit::UnitKind::Epic);
     }
 
     #[test]

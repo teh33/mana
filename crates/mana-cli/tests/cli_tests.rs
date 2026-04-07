@@ -132,7 +132,7 @@ fn create_claim_with_verify_succeeds() {
         acceptance: None,
         notes: None,
         design: None,
-        verify: Some("cargo test".to_string()),
+        verify: Some("cargo test create_claim_with_verify_succeeds".to_string()),
         priority: None,
         labels: None,
         assignee: None,

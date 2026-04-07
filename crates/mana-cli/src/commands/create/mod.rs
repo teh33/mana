@@ -8,7 +8,7 @@ use mana_core::verify_lint::{lint_verify, VerifyLintLevel};
 use crate::commands::claim::cmd_claim;
 use crate::index::Index;
 use crate::project::suggest_verify_command;
-use crate::unit::{validate_priority, OnFailAction};
+use crate::unit::{validate_priority, OnFailAction, UnitKind};
 use crate::util::{find_similar_titles, DEFAULT_SIMILARITY_THRESHOLD};
 
 /// Create arguments structure for organizing all the parameters passed to create.
@@ -42,6 +42,8 @@ pub struct CreateArgs {
     pub feature: bool,
     /// Unresolved decisions that block autonomous execution.
     pub decisions: Vec<String>,
+    /// Mark the new unit as an epic instead of a job.
+    pub epic: bool,
     /// Skip duplicate title check
     pub force: bool,
 }
@@ -189,6 +191,7 @@ pub fn cmd_create(mana_dir: &Path, args: CreateArgs) -> Result<String> {
         on_fail: args.on_fail,
         fail_first: !args.pass_ok && has_verify,
         feature: args.feature,
+        kind: if args.epic { Some(UnitKind::Epic) } else { None },
         verify_timeout: args.verify_timeout,
         decisions: args.decisions,
         force: args.force,

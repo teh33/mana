@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use crate::config::Config;
 use crate::hooks::{execute_hook, HookEvent};
 use crate::index::{Index, LockedIndex};
-use crate::unit::{validate_priority, OnFailAction, Unit};
+use crate::unit::{validate_priority, OnFailAction, Unit, UnitKind};
 use crate::util::title_to_slug;
 use crate::verify_lint::{lint_verify, VerifyLintLevel};
 
@@ -30,6 +30,7 @@ pub struct CreateParams {
     pub on_fail: Option<OnFailAction>,
     pub fail_first: bool,
     pub feature: bool,
+    pub kind: Option<UnitKind>,
     pub verify_timeout: Option<u64>,
     pub decisions: Vec<String>,
     /// Skip verify lint errors (allow anti-pattern verify commands)
@@ -93,6 +94,9 @@ pub fn create(mana_dir: &Path, params: CreateParams) -> Result<CreateResult> {
     unit.verify = params.verify;
     unit.fail_first = params.fail_first;
     unit.feature = params.feature;
+    if let Some(kind) = params.kind {
+        unit.kind = kind;
+    }
     unit.verify_timeout = params.verify_timeout;
     unit.on_fail = params.on_fail;
     if let Some(priority) = params.priority {
@@ -277,6 +281,7 @@ pub mod tests {
             on_fail: None,
             fail_first: false,
             feature: false,
+            kind: None,
             verify_timeout: None,
             decisions: vec![],
             force: false,

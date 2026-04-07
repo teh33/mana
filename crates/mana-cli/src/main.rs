@@ -141,6 +141,7 @@ fn main() -> Result<()> {
                 verify_timeout,
                 claim,
                 by,
+                epic,
                 feature,
                 decisions,
                 run,
@@ -231,6 +232,7 @@ fn main() -> Result<()> {
                         by,
                         verify_timeout,
                         feature: false,
+                        epic,
                         decisions: Vec::new(),
                         force,
                     },
@@ -358,6 +360,7 @@ fn main() -> Result<()> {
                         by,
                         feature,
                         decisions,
+                        epic,
                         force,
                     },
                 )?;
