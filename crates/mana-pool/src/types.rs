@@ -94,6 +94,12 @@ pub enum PoolEvent {
     /// Agent emitted a heartbeat while running.
     Heartbeat { unit_id: String, elapsed: Duration },
 
+    /// Agent appears stuck: no progress or heartbeat seen within idle timeout.
+    AgentStuck {
+        unit_id: String,
+        last_progress_secs_ago: u64,
+    },
+
     /// An agent completed (success or failure).
     Completed { result: AgentResult },
 
