@@ -4,20 +4,22 @@ use std::path::Path;
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::discovery::find_unit_file;
 use crate::graph::detect_cycle;
 use crate::index::{Index, IndexEntry};
 use crate::unit::Unit;
 
 /// Result of adding a dependency.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DepAddResult {
     pub from_id: String,
     pub to_id: String,
 }
 
 /// Result of removing a dependency.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DepRemoveResult {
     pub from_id: String,
     pub to_id: String,

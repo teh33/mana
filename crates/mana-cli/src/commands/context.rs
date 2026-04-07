@@ -135,7 +135,7 @@ fn format_child_summaries_section(
     let mut s = String::new();
     s.push_str("═══ Child Job Summaries ═════════════════════════════════════\n");
     for child in children {
-        let mut line = format!("{} [{}]", child.id, child.status);
+        let mut line = format!("{} [{}] attempts={}", child.id, child.status, child.attempts);
         if let Some(outcome) = &child.recent_outcome {
             line.push_str(&format!(" recent={}", outcome));
         }
@@ -497,6 +497,7 @@ mod tests {
             id: "1.1".to_string(),
             title: "Child".to_string(),
             status: "open".to_string(),
+            attempts: 2,
             recent_outcome: Some("failed".to_string()),
             summary: Some("Found a parser edge case".to_string()),
             follow_up: Some("1 unresolved decision(s)".to_string()),
@@ -504,7 +505,7 @@ mod tests {
         .unwrap();
 
         assert!(section.contains("Child Job Summaries"));
-        assert!(section.contains("1.1 [open] recent=failed: Child"));
+        assert!(section.contains("1.1 [open] attempts=2 recent=failed: Child"));
         assert!(section.contains("summary: Found a parser edge case"));
         assert!(section.contains("follow-up: 1 unresolved decision(s)"));
     }

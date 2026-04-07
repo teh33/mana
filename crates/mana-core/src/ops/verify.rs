@@ -5,11 +5,14 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 
+use serde::{Deserialize, Serialize};
+
 use crate::config::Config;
 use crate::discovery::find_unit_file;
 use crate::unit::Unit;
 
 /// Result of running a verify command.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifyResult {
     /// Whether the verify command passed (exit 0).
     pub passed: bool,

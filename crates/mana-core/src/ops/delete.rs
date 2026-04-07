@@ -4,11 +4,14 @@ use std::path::Path;
 use anyhow::Context;
 use anyhow::Result;
 
+use serde::{Deserialize, Serialize};
+
 use crate::discovery::find_unit_file;
 use crate::index::Index;
 use crate::unit::Unit;
 
 /// Result of deleting a unit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteResult {
     pub id: String,
     pub title: String,

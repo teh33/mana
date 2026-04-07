@@ -39,6 +39,7 @@ pub struct ChildSummaryOutput {
     pub id: String,
     pub title: String,
     pub status: String,
+    pub attempts: usize,
     pub recent_outcome: Option<String>,
     pub summary: Option<String>,
     pub follow_up: Option<String>,
@@ -104,6 +105,7 @@ pub fn cmd_trace(id: &str, json: bool, mana_dir: &Path) -> Result<()> {
             id: child.id,
             title: child.title,
             status: child.status,
+            attempts: child.attempts,
             recent_outcome: child.recent_outcome,
             summary: child.summary,
             follow_up: child.follow_up,
@@ -281,11 +283,12 @@ fn print_trace(output: &TraceOutput) {
         println!("  Child summaries:");
         for child in &output.child_summaries {
             let mut line = format!(
-                "    {} {} \"{}\" [{}]",
+                "    {} {} \"{}\" [{}] attempts={}",
                 status_indicator(&child.status),
                 child.id,
                 child.title,
-                child.status
+                child.status,
+                child.attempts
             );
             if let Some(outcome) = &child.recent_outcome {
                 line.push_str(&format!(" recent={}", outcome));
@@ -498,6 +501,7 @@ mod tests {
                     id: child.id,
                     title: child.title,
                     status: child.status,
+                    attempts: child.attempts,
                     recent_outcome: child.recent_outcome,
                     summary: child.summary,
                     follow_up: child.follow_up,
@@ -512,6 +516,7 @@ mod tests {
 
         assert_eq!(output.child_summaries.len(), 1);
         assert_eq!(output.child_summaries[0].id, "20.1");
+        assert_eq!(output.child_summaries[0].attempts, 1);
         assert_eq!(
             output.child_summaries[0].recent_outcome.as_deref(),
             Some("failed")

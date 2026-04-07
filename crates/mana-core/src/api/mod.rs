@@ -116,6 +116,21 @@ pub use crate::discovery::find_archived_unit;
 
 /// A node in the unit hierarchy tree, used by [`get_tree`].
 #[derive(Debug, Clone)]
+pub struct SiblingComparison {
+    /// Unit ID.
+    pub id: String,
+    /// Unit title.
+    pub title: String,
+    /// Unit status.
+    pub status: Status,
+    /// Number of recorded attempts.
+    pub attempts: usize,
+    /// Recent lifecycle outcome, when known.
+    pub recent_outcome: Option<String>,
+}
+
+/// A node in the unit hierarchy tree, used by [`get_tree`].
+#[derive(Debug, Clone)]
 pub struct TreeNode {
     /// Unit ID.
     pub id: String,
@@ -162,6 +177,7 @@ pub use crate::ops::{
 };
 
 pub use crate::ops::context::AgentContext;
+pub use crate::ops::context::summarize_child_units as compare_sibling_jobs;
 pub use crate::ops::fact::{FactParams, FactResult, VerifyFactsResult};
 pub use crate::ops::run::{BlockedUnit, ReadyQueue, ReadyUnit, RunPlan, RunWave};
 pub use crate::ops::stats::StatsResult;

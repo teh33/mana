@@ -5,6 +5,8 @@ use std::process::Command as ShellCommand;
 use anyhow::{anyhow, Result};
 use chrono::{Duration, Utc};
 
+use serde::{Deserialize, Serialize};
+
 use crate::discovery::{find_archived_unit, find_unit_file};
 use crate::index::Index;
 use crate::ops::create::{create, CreateParams};
@@ -24,14 +26,14 @@ pub struct FactParams {
 }
 
 /// Result of creating a fact.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FactResult {
     pub unit_id: String,
     pub unit: Unit,
 }
 
 /// Result of a single fact verification.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FactVerifyEntry {
     pub id: String,
     pub title: String,
@@ -41,6 +43,7 @@ pub struct FactVerifyEntry {
 }
 
 /// Aggregated result of verifying all facts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifyFactsResult {
     pub total_facts: usize,
     pub verified_count: usize,

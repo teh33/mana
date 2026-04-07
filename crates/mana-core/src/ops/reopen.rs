@@ -3,11 +3,14 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use chrono::Utc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::discovery::find_unit_file;
 use crate::index::Index;
 use crate::unit::{Status, Unit};
 
 /// Result of reopening a unit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReopenResult {
     pub unit: Unit,
     pub path: PathBuf,

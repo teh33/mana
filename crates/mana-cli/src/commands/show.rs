@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use anyhow::Result;
-use mana_core::ops::context::summarize_child_units;
 use mana_core::ops::show as ops_show;
+use mana_core::ops::context::{summarize_child_units, ChildSummary};
 use termimad::MadSkin;
 
 use crate::unit::{RunRecord, Unit};
@@ -33,6 +33,27 @@ pub fn cmd_show(id: &str, json: bool, short: bool, history: bool, mana_dir: &Pat
     }
 
     Ok(())
+}
+
+fn render_sibling_comparison(child_summaries: &[ChildSummary]) {
+    if child_summaries.len() < 2 {
+        return;
+    }
+
+    println!("\n**Sibling Comparison**");
+    for child in child_summaries {
+        let mut line = format!(
+            "- {} [{}] attempts={}: {}",
+            child.id, child.status, child.attempts, child.title
+        );
+        if let Some(outcome) = &child.recent_outcome {
+            line.push_str(&format!(" recent={}", outcome));
+        }
+        println!("{}", line);
+        if let Some(summary) = &child.summary {
+            println!("  summary: {}", summary);
+        }
+    }
 }
 
 /// Render a unit beautifully with metadata header and formatted markdown body
@@ -95,7 +116,7 @@ fn render_unit(
     if !child_summaries.is_empty() {
         println!("\n**Child Job Summaries**");
         for child in child_summaries {
-            let mut line = format!("- {} [{}]", child.id, child.status);
+            let mut line = format!("- {} [{}] attempts={}", child.id, child.status, child.attempts);
             if let Some(outcome) = &child.recent_outcome {
                 line.push_str(&format!(" recent={}", outcome));
             }
@@ -108,6 +129,7 @@ fn render_unit(
                 println!("  follow-up: {}", follow_up);
             }
         }
+        render_sibling_comparison(child_summaries);
     }
 
     // Print outputs
@@ -736,6 +758,34 @@ mod tests {
     // ------------------------------------------------------------------
     // Outputs display
     // ------------------------------------------------------------------
+
+    #[test]
+    fn render_unit_accepts_multiple_child_summaries_for_comparison() {
+        let unit = Unit::new("1", "Parent");
+        let child_summaries = vec![
+            ChildSummary {
+                id: "1.1".to_string(),
+                title: "Attempt A".to_string(),
+                status: "open".to_string(),
+                attempts: 2,
+                recent_outcome: Some("failed".to_string()),
+                summary: Some("Tried parser branch A".to_string()),
+                follow_up: None,
+            },
+            ChildSummary {
+                id: "1.2".to_string(),
+                title: "Attempt B".to_string(),
+                status: "closed".to_string(),
+                attempts: 1,
+                recent_outcome: Some("success".to_string()),
+                summary: Some("Fixed it via branch B".to_string()),
+                follow_up: None,
+            },
+        ];
+
+        let result = render_unit(&unit, &child_summaries, false);
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn outputs_not_shown_when_none() {

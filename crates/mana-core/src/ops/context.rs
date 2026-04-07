@@ -34,6 +34,7 @@ pub struct ChildSummary {
     pub id: String,
     pub title: String,
     pub status: String,
+    pub attempts: usize,
     pub recent_outcome: Option<String>,
     pub summary: Option<String>,
     pub follow_up: Option<String>,
@@ -273,6 +274,7 @@ pub fn summarize_child_units(mana_dir: &Path, parent_id: &str) -> Vec<ChildSumma
                 id: entry.id,
                 title: entry.title,
                 status: entry.status.to_string(),
+                attempts: full_unit.as_ref().map(|unit| unit.attempt_log.len()).unwrap_or(0),
                 recent_outcome,
                 summary,
                 follow_up,
@@ -683,6 +685,7 @@ mod tests {
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, "1.1");
         assert_eq!(summaries[0].status, "open");
+        assert_eq!(summaries[0].attempts, 1);
         assert_eq!(summaries[0].recent_outcome.as_deref(), Some("failed"));
         assert!(summaries[0]
             .summary
@@ -717,6 +720,7 @@ mod tests {
         let summaries = summarize_child_units(&mana_dir, "2");
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].recent_outcome.as_deref(), Some("success"));
+        assert_eq!(summaries[0].attempts, 0);
         assert!(summaries[0]
             .summary
             .as_deref()
