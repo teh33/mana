@@ -85,7 +85,7 @@ pub fn claim(mana_dir: &Path, id: &str, params: ClaimParams) -> Result<ClaimResu
     }
 
     let has_verify = unit.verify.as_ref().is_some_and(|v| !v.trim().is_empty());
-    let is_goal = !has_verify;
+    let is_goal = !unit.is_dispatchable_job();
     let project_root = mana_dir
         .parent()
         .ok_or_else(|| anyhow!("Cannot determine project root from units dir"))?;
@@ -356,6 +356,22 @@ mod tests {
         let index = Index::load(&bd).unwrap();
         assert_eq!(index.units.len(), 1);
         assert_eq!(index.units[0].status, Status::Open);
+    }
+
+    #[test]
+    fn claim_epic_is_goal_even_with_verify() {
+        let (_dir, bd) = setup();
+        let mut params = minimal_params("Epic");
+        params.verify = Some("cargo test claim_epic_is_goal_even_with_verify".to_string());
+        create::create(&bd, params).unwrap();
+
+        let bp = find_unit_file(&bd, "1").unwrap();
+        let mut unit = Unit::from_file(&bp).unwrap();
+        unit.kind = crate::unit::UnitKind::Epic;
+        unit.to_file(&bp).unwrap();
+
+        let result = claim(&bd, "1", force_params(Some("alice"))).unwrap();
+        assert!(result.is_goal);
     }
 
     #[test]

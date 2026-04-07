@@ -356,7 +356,7 @@ fn has_open_children(entry: &IndexEntry, index: &Index) -> bool {
 
 /// Get a categorized project status summary.
 ///
-/// Returns units grouped into: features, in-progress (claimed), ready to run,
+/// Returns units grouped into: epics, features, in-progress (claimed), ready to run,
 /// goals (no verify command), and blocked (dependencies not met).
 ///
 /// # Errors
@@ -403,9 +403,8 @@ pub fn get_stats(mana_dir: &Path) -> Result<StatsResult> {
 
 /// Return units with all dependencies satisfied (ready to dispatch).
 ///
-/// A unit is "ready" if it has a verify command, its status is `Open`,
-/// and all of its explicit dependency IDs are closed in the active index
-/// or archived.
+/// A unit is "ready" if it is an open dispatchable job and all of its
+/// explicit dependency IDs are closed in the active index or archived.
 ///
 /// # Example
 /// ```rust,no_run
@@ -432,6 +431,7 @@ pub fn ready_units(index: &Index) -> Vec<&IndexEntry> {
         .iter()
         .filter(|e| {
             e.status == Status::Open
+                && e.kind == crate::unit::UnitKind::Job
                 && e.has_verify
                 && e.dependencies
                     .iter()

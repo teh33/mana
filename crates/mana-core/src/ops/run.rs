@@ -24,7 +24,7 @@ use anyhow::Result;
 use crate::blocking::check_blocked_with_archive;
 use crate::discovery::find_unit_file;
 use crate::index::{ArchiveIndex, Index, IndexEntry};
-use crate::unit::{Status, Unit};
+use crate::unit::{Status, Unit, UnitKind};
 use crate::util::natural_cmp;
 
 // ---------------------------------------------------------------------------
@@ -270,7 +270,8 @@ pub fn compute_ready_queue(
         .units
         .iter()
         .filter(|e| {
-            e.has_verify
+            e.kind == UnitKind::Job
+                && e.has_verify
                 && e.status == Status::Open
                 && (simulate || all_deps_closed(e, &index, &archive))
         })
@@ -494,6 +495,60 @@ mod tests {
     }
 
     // -- compute_downstream_weights tests --
+
+    #[test]
+    fn run_only_dispatches_jobs() {
+        let dir = tempfile::tempdir().unwrap();
+        let mana_dir = dir.path().join(".mana");
+        std::fs::create_dir(&mana_dir).unwrap();
+
+        crate::config::Config {
+            project: "test".to_string(),
+            next_id: 1,
+            auto_close_parent: true,
+            run: None,
+            plan: None,
+            max_loops: 10,
+            max_concurrent: 4,
+            poll_interval: 30,
+            extends: vec![],
+            rules_file: None,
+            file_locking: false,
+            worktree: false,
+            on_close: None,
+            on_fail: None,
+            verify_timeout: None,
+            review: None,
+            user: None,
+            user_email: None,
+            auto_commit: false,
+            commit_template: None,
+            research: None,
+            run_model: None,
+            plan_model: None,
+            review_model: None,
+            research_model: None,
+            batch_verify: false,
+            memory_reserve_mb: 0,
+            notify: None,
+        }
+        .save(&mana_dir)
+        .unwrap();
+
+        let mut epic = Unit::new("1", "Epic parent");
+        epic.kind = UnitKind::Epic;
+        epic.verify = Some("cargo test should_not_dispatch_epic".to_string());
+        epic.to_file(mana_dir.join("1-epic-parent.md")).unwrap();
+
+        let mut job = Unit::new("2", "Dispatchable job");
+        job.kind = UnitKind::Job;
+        job.verify = Some("cargo test dispatchable_job".to_string());
+        job.to_file(mana_dir.join("2-dispatchable-job.md")).unwrap();
+
+        let queue = compute_ready_queue(&mana_dir, None, false).unwrap();
+        assert_eq!(queue.units.len(), 1);
+        assert_eq!(queue.units[0].id, "2");
+    }
 
     #[test]
     fn weights_single_unit() {

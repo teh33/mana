@@ -5,12 +5,13 @@ use serde::Serialize;
 
 use crate::blocking::check_blocked_with_archive;
 use crate::index::{ArchiveIndex, Index, IndexEntry};
-use crate::unit::Status;
+use crate::unit::{Status, UnitKind};
 use crate::util::natural_cmp;
 
 /// Categorized view of project status.
 #[derive(Debug, Serialize)]
 pub struct StatusSummary {
+    pub epics: Vec<IndexEntry>,
     pub features: Vec<IndexEntry>,
     pub claimed: Vec<IndexEntry>,
     pub ready: Vec<IndexEntry>,
@@ -33,6 +34,7 @@ pub fn status(mana_dir: &Path) -> Result<StatusSummary> {
     let archive = ArchiveIndex::load_or_rebuild(mana_dir)
         .unwrap_or_else(|_| ArchiveIndex { units: Vec::new() });
 
+    let mut epics: Vec<IndexEntry> = Vec::new();
     let mut features: Vec<IndexEntry> = Vec::new();
     let mut claimed: Vec<IndexEntry> = Vec::new();
     let mut ready: Vec<IndexEntry> = Vec::new();
@@ -42,6 +44,10 @@ pub fn status(mana_dir: &Path) -> Result<StatusSummary> {
     for entry in &index.units {
         if entry.feature {
             features.push(entry.clone());
+            continue;
+        }
+        if entry.kind == UnitKind::Epic {
+            epics.push(entry.clone());
             continue;
         }
         match entry.status {
@@ -54,7 +60,7 @@ pub fn status(mana_dir: &Path) -> Result<StatusSummary> {
                         entry: entry.clone(),
                         block_reason: reason.to_string(),
                     });
-                } else if entry.has_verify {
+                } else if entry.kind == UnitKind::Job && entry.has_verify {
                     ready.push(entry.clone());
                 } else {
                     goals.push(entry.clone());
@@ -64,6 +70,7 @@ pub fn status(mana_dir: &Path) -> Result<StatusSummary> {
         }
     }
 
+    sort_entries(&mut epics);
     sort_entries(&mut features);
     sort_entries(&mut claimed);
     sort_entries(&mut ready);
@@ -74,6 +81,7 @@ pub fn status(mana_dir: &Path) -> Result<StatusSummary> {
     });
 
     Ok(StatusSummary {
+        epics,
         features,
         claimed,
         ready,
@@ -108,6 +116,33 @@ mod tests {
         let slug = title_to_slug(&unit.title);
         let path = mana_dir.join(format!("{}-{}.md", unit.id, slug));
         unit.to_file(path).unwrap();
+    }
+
+    #[test]
+    fn status_groups_by_kind() {
+        let (_dir, mana_dir) = setup();
+
+        let mut epic = Unit::new("1", "Epic");
+        epic.kind = UnitKind::Epic;
+        write_unit(&mana_dir, &epic);
+
+        let mut job = Unit::new("2", "Job");
+        job.kind = UnitKind::Job;
+        job.verify = Some("cargo test job".to_string());
+        write_unit(&mana_dir, &job);
+
+        let mut feature = Unit::new("3", "Feature");
+        feature.kind = UnitKind::Epic;
+        feature.feature = true;
+        write_unit(&mana_dir, &feature);
+
+        let result = status(&mana_dir).unwrap();
+        assert_eq!(result.epics.len(), 1);
+        assert_eq!(result.epics[0].id, "1");
+        assert_eq!(result.ready.len(), 1);
+        assert_eq!(result.ready[0].id, "2");
+        assert_eq!(result.features.len(), 1);
+        assert_eq!(result.features[0].id, "3");
     }
 
     #[test]
