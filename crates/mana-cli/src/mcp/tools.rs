@@ -14,7 +14,7 @@ use crate::config::Config;
 use crate::discovery::find_unit_file;
 use crate::index::{Index, IndexEntry};
 use crate::mcp::protocol::ToolDefinition;
-use crate::unit::{Status, Unit};
+use crate::unit::{Status, Unit, UnitKind};
 use crate::util::{natural_cmp, title_to_slug};
 
 /// Return all MCP tool definitions.
@@ -60,7 +60,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "ready_units".to_string(),
-            description: "Get units ready to work on (open, has verify command, all dependencies resolved)".to_string(),
+            description: "Get units ready to work on (open dispatchable jobs with all dependencies resolved)".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {}
@@ -177,7 +177,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "status".to_string(),
-            description: "Project status overview: claimed, ready, goals, and blocked units".to_string(),
+            description: "Project status overview: claimed, ready jobs, epics, and blocked units".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {}
@@ -314,7 +314,8 @@ fn handle_ready_units(mana_dir: &Path) -> Result<String> {
         .units
         .iter()
         .filter(|entry| {
-            entry.has_verify
+            entry.kind == UnitKind::Job
+                && entry.has_verify
                 && entry.status == Status::Open
                 && check_blocked(entry, &index).is_none()
         })
@@ -616,6 +617,7 @@ fn handle_status(mana_dir: &Path) -> Result<String> {
 
     let mut claimed = Vec::new();
     let mut ready = Vec::new();
+    let mut epics = Vec::new();
     let mut goals = Vec::new();
     let mut blocked: Vec<(&IndexEntry, String)> = Vec::new();
 
@@ -625,6 +627,10 @@ fn handle_status(mana_dir: &Path) -> Result<String> {
             Status::Open => {
                 if let Some(reason) = check_blocked(entry, &index) {
                     blocked.push((entry, reason.to_string()));
+                } else if entry.feature {
+                    goals.push(entry);
+                } else if entry.kind == UnitKind::Epic {
+                    epics.push(entry);
                 } else if entry.has_verify {
                     ready.push(entry);
                 } else {
@@ -665,11 +671,12 @@ fn handle_status(mana_dir: &Path) -> Result<String> {
     serde_json::to_string_pretty(&json!({
         "claimed": format_entries(&claimed),
         "ready": format_entries(&ready),
+        "epics": format_entries(&epics),
         "goals": format_entries(&goals),
         "blocked": blocked_entries,
         "summary": format!(
-            "{} claimed, {} ready, {} goals, {} blocked",
-            claimed.len(), ready.len(), goals.len(), blocked.len()
+            "{} claimed, {} ready, {} epics, {} goals, {} blocked",
+            claimed.len(), ready.len(), epics.len(), goals.len(), blocked.len()
         )
     }))
     .context("Failed to serialize status")

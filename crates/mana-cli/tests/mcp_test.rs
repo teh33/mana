@@ -12,7 +12,7 @@ use mana::index::Index;
 use mana::mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
 use mana::mcp::resources;
 use mana::mcp::tools;
-use mana::unit::Unit;
+use mana::unit::{Unit, UnitKind};
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -33,6 +33,7 @@ fn setup_mcp_env() -> (TempDir, std::path::PathBuf) {
 
     // Unit 1: open with verify (scoped with produces/paths)
     let mut unit1 = Unit::new("1", "Fix login bug");
+    unit1.kind = UnitKind::Job;
     unit1.slug = Some("fix-login-bug".to_string());
     unit1.verify = Some("echo pass".to_string());
     unit1.description = Some("Fix the login authentication flow".to_string());
@@ -42,6 +43,7 @@ fn setup_mcp_env() -> (TempDir, std::path::PathBuf) {
 
     // Unit 2: open, depends on 1 (scoped with produces/paths)
     let mut unit2 = Unit::new("2", "Add tests for login");
+    unit2.kind = UnitKind::Job;
     unit2.slug = Some("add-tests-for-login".to_string());
     unit2.verify = Some("echo pass".to_string());
     unit2.dependencies = vec!["1".to_string()];
@@ -51,10 +53,11 @@ fn setup_mcp_env() -> (TempDir, std::path::PathBuf) {
         .to_file(mana_dir.join("2-add-tests-for-login.md"))
         .unwrap();
 
-    // Unit 3: open goal (no verify, but scoped)
+    // Unit 3: open epic (no verify, but scoped)
     let mut unit3 = Unit::new("3", "Refactor auth module");
     unit3.slug = Some("refactor-auth-module".to_string());
     unit3.priority = 1;
+    unit3.kind = UnitKind::Epic;
     unit3.produces = vec!["AuthRefactor".to_string()];
     unit3.paths = vec!["src/auth.rs".to_string()];
     unit3
@@ -241,6 +244,21 @@ fn mcp_ready_units_excludes_blocked() {
     // Unit 3 has no verify
     assert_eq!(parsed["count"], 1);
     assert_eq!(parsed["ready"][0]["id"], "1");
+}
+
+#[test]
+fn mcp_status_reports_epics() {
+    let (_dir, mana_dir) = setup_mcp_env();
+    let result = tools::handle_tool_call("status", &json!({}), &mana_dir);
+
+    let text = result["content"][0]["text"].as_str().unwrap();
+    let parsed: Value = serde_json::from_str(text).unwrap();
+
+    assert_eq!(parsed["ready"].as_array().unwrap().len(), 1);
+    assert_eq!(parsed["ready"][0]["id"], "1");
+    assert_eq!(parsed["epics"].as_array().unwrap().len(), 1);
+    assert_eq!(parsed["epics"][0]["id"], "3");
+    assert!(parsed["summary"].as_str().unwrap().contains("1 epics"));
 }
 
 // ---------------------------------------------------------------------------

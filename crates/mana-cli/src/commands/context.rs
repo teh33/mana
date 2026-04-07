@@ -125,7 +125,9 @@ fn format_structure_block(structures: &[(&str, String)]) -> Option<String> {
 }
 
 /// Format child job summaries into a compact context section.
-fn format_child_summaries_section(children: &[mana_core::ops::context::ChildSummary]) -> Option<String> {
+fn format_child_summaries_section(
+    children: &[mana_core::ops::context::ChildSummary],
+) -> Option<String> {
     if children.is_empty() {
         return None;
     }

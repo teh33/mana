@@ -191,7 +191,11 @@ pub fn cmd_create(mana_dir: &Path, args: CreateArgs) -> Result<String> {
         on_fail: args.on_fail,
         fail_first: !args.pass_ok && has_verify,
         feature: args.feature,
-        kind: if args.epic { Some(UnitKind::Epic) } else { None },
+        kind: if args.epic {
+            Some(UnitKind::Epic)
+        } else {
+            None
+        },
         verify_timeout: args.verify_timeout,
         decisions: args.decisions,
         force: args.force,

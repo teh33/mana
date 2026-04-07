@@ -280,7 +280,8 @@ fn print_trace(output: &TraceOutput) {
     if !output.child_summaries.is_empty() {
         println!("  Child summaries:");
         for child in &output.child_summaries {
-            let mut line = format!("    {} {} \"{}\" [{}]",
+            let mut line = format!(
+                "    {} {} \"{}\" [{}]",
                 status_indicator(&child.status),
                 child.id,
                 child.title,
@@ -511,7 +512,10 @@ mod tests {
 
         assert_eq!(output.child_summaries.len(), 1);
         assert_eq!(output.child_summaries[0].id, "20.1");
-        assert_eq!(output.child_summaries[0].recent_outcome.as_deref(), Some("failed"));
+        assert_eq!(
+            output.child_summaries[0].recent_outcome.as_deref(),
+            Some("failed")
+        );
         assert!(output.child_summaries[0]
             .summary
             .as_deref()

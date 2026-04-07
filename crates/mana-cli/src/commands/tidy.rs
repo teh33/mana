@@ -344,7 +344,11 @@ fn cmd_tidy_inner(
     let verifiable_open: Vec<&crate::index::IndexEntry> = sweep_index
         .units
         .iter()
-        .filter(|entry| entry.status == Status::Open && entry.has_verify)
+        .filter(|entry| {
+            entry.status == Status::Open
+                && entry.kind == crate::unit::UnitKind::Job
+                && entry.has_verify
+        })
         .collect();
 
     let mut swept: Vec<SweptUnit> = Vec::new();

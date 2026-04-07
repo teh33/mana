@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::blocking::check_blocked;
 use crate::index::{Index, IndexEntry};
-use crate::unit::Status;
+use crate::unit::{Status, UnitKind};
 
 /// A scored unit with metadata for display.
 #[derive(Debug, Serialize)]
@@ -89,6 +89,7 @@ pub fn cmd_next(n: usize, json: bool, mana_dir: &Path) -> Result<()> {
         .iter()
         .filter(|e| {
             e.status == Status::Open
+                && e.kind == UnitKind::Job
                 && e.has_verify
                 && !e.feature
                 && check_blocked(e, &index).is_none()
@@ -206,6 +207,52 @@ mod tests {
             feature: false,
             has_decisions: false,
         }
+    }
+
+    #[test]
+    fn next_only_recommends_jobs() {
+        let index = Index {
+            units: vec![
+                IndexEntry {
+                    id: "1".to_string(),
+                    title: "Epic".to_string(),
+                    status: Status::Open,
+                    priority: 1,
+                    parent: None,
+                    dependencies: vec![],
+                    labels: vec![],
+                    assignee: None,
+                    updated_at: Utc::now(),
+                    produces: vec![],
+                    requires: vec![],
+                    has_verify: true,
+                    verify: Some("echo nope".to_string()),
+                    created_at: Utc::now(),
+                    claimed_by: None,
+                    attempts: 0,
+                    paths: vec![],
+                    kind: UnitKind::Epic,
+                    feature: false,
+                    has_decisions: false,
+                },
+                make_entry("2", 0),
+            ],
+        };
+
+        let ready: Vec<&IndexEntry> = index
+            .units
+            .iter()
+            .filter(|e| {
+                e.status == Status::Open
+                    && e.kind == UnitKind::Job
+                    && e.has_verify
+                    && !e.feature
+                    && check_blocked(e, &index).is_none()
+            })
+            .collect();
+
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].id, "2");
     }
 
     #[test]

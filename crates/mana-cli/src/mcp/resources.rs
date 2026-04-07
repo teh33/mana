@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::discovery::find_unit_file;
 use crate::index::Index;
 use crate::mcp::protocol::{ResourceContent, ResourceDefinition};
-use crate::unit::Unit;
+use crate::unit::{Unit, UnitKind};
 
 /// Return static resource definitions.
 pub fn resource_definitions() -> Vec<ResourceDefinition> {
@@ -17,7 +17,7 @@ pub fn resource_definitions() -> Vec<ResourceDefinition> {
             uri: "units://status".to_string(),
             name: "Project Status".to_string(),
             description: Some(
-                "Current project status: claimed, ready, goals, and blocked units".to_string(),
+                "Current project status: claimed, ready jobs, epics, and blocked units".to_string(),
             ),
             mime_type: Some("application/json".to_string()),
         },
@@ -53,17 +53,22 @@ fn read_status_resource(mana_dir: &Path) -> Result<Vec<ResourceContent>> {
 
     let mut claimed = 0u32;
     let mut ready = 0u32;
+    let mut epics = 0u32;
     let mut goals = 0u32;
     let mut blocked = 0u32;
     let mut closed = 0u32;
+    let mut features = 0u32;
 
     for entry in &index.units {
         match entry.status {
             crate::unit::Status::InProgress | crate::unit::Status::AwaitingVerify => claimed += 1,
             crate::unit::Status::Closed => closed += 1,
             crate::unit::Status::Open => {
-                if entry.has_verify {
-                    // Check if blocked
+                if entry.feature {
+                    features += 1;
+                } else if entry.kind == UnitKind::Epic {
+                    epics += 1;
+                } else if entry.has_verify {
                     let is_blocked = entry.dependencies.iter().any(|dep_id| {
                         index
                             .units
@@ -87,6 +92,8 @@ fn read_status_resource(mana_dir: &Path) -> Result<Vec<ResourceContent>> {
         "total": index.units.len(),
         "claimed": claimed,
         "ready": ready,
+        "epics": epics,
+        "features": features,
         "goals": goals,
         "blocked": blocked,
         "closed": closed,

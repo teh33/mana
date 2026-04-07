@@ -307,7 +307,8 @@ impl UnitKind {
 
 impl Unit {
     pub fn is_dispatchable_job(&self) -> bool {
-        self.kind.is_dispatchable_job() && self.verify.as_ref().is_some_and(|v| !v.trim().is_empty())
+        self.kind.is_dispatchable_job()
+            && self.verify.as_ref().is_some_and(|v| !v.trim().is_empty())
     }
 
     pub fn is_claimable(&self) -> bool {
