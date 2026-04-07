@@ -68,7 +68,7 @@ fn create_minimal_unit() {
         on_fail: None,
         pass_ok: true,
         feature: false,
-        epic: false,
+        epic: true,
 
         claim: false,
         by: None,
