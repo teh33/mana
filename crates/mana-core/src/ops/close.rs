@@ -1355,8 +1355,8 @@ fn auto_commit_on_close(
 /// Rebuild the index.
 fn rebuild_index(mana_dir: &Path) -> Result<()> {
     if mana_dir.exists() {
-        let mut locked = LockedIndex::acquire(mana_dir)
-            .with_context(|| "Failed to acquire locked index")?;
+        let mut locked =
+            LockedIndex::acquire(mana_dir).with_context(|| "Failed to acquire locked index")?;
         locked.index = Index::build(mana_dir).with_context(|| "Failed to rebuild index")?;
         locked
             .save_and_release()
@@ -2118,7 +2118,8 @@ mod tests {
             let head_subject = git_stdout(project_root, &["log", "-1", "--pretty=%s"]);
             assert_eq!(head_subject.trim(), "feat(unit-1.1): Child");
 
-            let changed_files = git_stdout(project_root, &["show", "--name-only", "--format=", "HEAD"]);
+            let changed_files =
+                git_stdout(project_root, &["show", "--name-only", "--format=", "HEAD"]);
             assert!(
                 changed_files.contains(".mana/index.yaml"),
                 "{changed_files}"

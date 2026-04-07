@@ -2,6 +2,14 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
 
+#[derive(Debug, Clone, Serialize)]
+pub struct RunRuntimeInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direct_agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+}
+
 /// JSON-line events emitted by `mana run --json-stream` for programmatic consumers.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -12,6 +20,8 @@ pub enum StreamEvent {
         total_units: usize,
         total_rounds: usize,
         units: Vec<UnitInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        runtime: Option<RunRuntimeInfo>,
     },
     /// Emitted at run start with the full execution plan and detected file overlaps.
     RunPlan {
@@ -19,6 +29,8 @@ pub enum StreamEvent {
         waves: Vec<RoundPlan>,
         file_overlaps: Vec<FileOverlapInfo>,
         total_units: usize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        runtime: Option<RunRuntimeInfo>,
     },
     RoundStart {
         round: usize,
@@ -101,6 +113,8 @@ pub enum StreamEvent {
         /// IDs of units on the critical path, in order.
         #[serde(skip_serializing_if = "Vec::is_empty")]
         critical_path: Vec<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        runtime: Option<RunRuntimeInfo>,
     },
     Error {
         message: String,
@@ -205,6 +219,7 @@ mod tests {
                 title: "first".into(),
                 round: 1,
             }],
+            runtime: None,
         };
         let json: serde_json::Value = serde_json::to_value(&event).unwrap();
         assert_eq!(json["type"], "run_start");
@@ -317,6 +332,7 @@ mod tests {
                 },
             ],
             critical_path: vec![],
+            runtime: None,
         };
         let json: serde_json::Value = serde_json::to_value(&event).unwrap();
         assert_eq!(json["type"], "dry_run");
@@ -371,6 +387,7 @@ mod tests {
                 shared_files: vec!["src/main.rs".into()],
             }],
             total_units: 3,
+            runtime: None,
         };
         let json: serde_json::Value = serde_json::to_value(&event).unwrap();
         assert_eq!(json["type"], "run_plan");

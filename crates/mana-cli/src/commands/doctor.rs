@@ -342,7 +342,9 @@ pub fn cmd_doctor(mana_dir: &Path, fix: bool) -> Result<()> {
 
         for issue in &issues {
             match issue {
-                Issue::StaleIndex | Issue::StaleIndexEntry { .. } | Issue::MissingIndexEntry { .. } => {
+                Issue::StaleIndex
+                | Issue::StaleIndexEntry { .. }
+                | Issue::MissingIndexEntry { .. } => {
                     // Rebuild index handles all of these
                     // We'll do one rebuild at the end
                 }

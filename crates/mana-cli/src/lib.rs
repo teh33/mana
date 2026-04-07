@@ -1,4 +1,8 @@
 // Core modules — re-exported from mana-core
+pub use crate::commands::run::{
+    run_native, run_with_stream_capture, run_with_stream_capture_and_sink, NativeRunParams,
+    RunArgs, RunSummary, RunTarget, RunUnitStatus, RunView,
+};
 pub use mana_core::agent_presets;
 pub use mana_core::api;
 pub use mana_core::blocking;

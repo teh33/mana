@@ -623,11 +623,7 @@ impl GlobalConfig {
         inherit_option(&mut config.review_model, &self.review_model);
         inherit_option(&mut config.research_model, &self.research_model);
         inherit_sparse_value_if_default(&mut config.batch_verify, false, self.batch_verify);
-        inherit_sparse_value_if_default(
-            &mut config.memory_reserve_mb,
-            0,
-            self.memory_reserve_mb,
-        );
+        inherit_sparse_value_if_default(&mut config.memory_reserve_mb, 0, self.memory_reserve_mb);
         inherit_option(&mut config.notify, &self.notify);
     }
 }

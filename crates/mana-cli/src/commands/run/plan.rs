@@ -13,7 +13,7 @@ use super::wave::{
     compute_critical_path, compute_downstream_weights, compute_effective_parallelism,
     compute_file_conflicts, compute_waves, Wave,
 };
-use super::UnitAction;
+use super::{RunTarget, UnitAction};
 
 /// A unit ready for dispatch.
 #[derive(Debug, Clone)]
@@ -79,11 +79,33 @@ fn has_open_descendants(index: &Index, unit_id: &str) -> bool {
         .any(|entry| entry.status != Status::Closed && is_descendant_of(index, &entry.id, unit_id))
 }
 
+fn matches_target(index: &Index, entry: &IndexEntry, target: &RunTarget) -> bool {
+    match target {
+        RunTarget::AllReady => true,
+        RunTarget::Unit(filter_id) => {
+            let target_has_open_descendants = index.units.iter().any(|candidate| {
+                candidate.status != Status::Closed
+                    && is_descendant_of(index, &candidate.id, filter_id)
+            });
+
+            if target_has_open_descendants {
+                is_descendant_of(index, &entry.id, filter_id)
+                    && !has_open_descendants(index, &entry.id)
+            } else {
+                entry.id == *filter_id
+            }
+        }
+        RunTarget::Explicit(ids) => ids
+            .iter()
+            .any(|id| matches_target(index, entry, &RunTarget::Unit(id.clone()))),
+    }
+}
+
 /// Plan dispatch: get ready units, filter by scope, compute waves.
 pub(super) fn plan_dispatch(
     mana_dir: &Path,
     _config: &Config,
-    filter_id: Option<&str>,
+    target: &RunTarget,
     simulate: bool,
 ) -> Result<DispatchPlan> {
     let index = Index::load_or_rebuild(mana_dir)?;
@@ -108,20 +130,9 @@ pub(super) fn plan_dispatch(
     // containers and shouldn't be dispatched while children are still pending.
     candidate_entries.retain(|entry| !has_open_descendants(&index, &entry.id));
 
-    // Filter by ID if provided
-    if let Some(filter_id) = filter_id {
-        let target_has_open_descendants = index.units.iter().any(|entry| {
-            entry.status != Status::Closed && is_descendant_of(&index, &entry.id, filter_id)
-        });
-
-        if target_has_open_descendants {
-            candidate_entries.retain(|entry| {
-                is_descendant_of(&index, &entry.id, filter_id)
-                    && !has_open_descendants(&index, &entry.id)
-            });
-        } else {
-            candidate_entries.retain(|e| e.id == filter_id);
-        }
+    // Filter by target if provided
+    if !matches!(target, RunTarget::AllReady) {
+        candidate_entries.retain(|entry| matches_target(&index, entry, target));
     }
 
     // Partition into dispatchable vs blocked.
@@ -275,8 +286,12 @@ pub(super) fn print_plan(plan: &DispatchPlan, config_run_model: Option<&str>) {
 }
 
 /// Print the dispatch plan as JSON stream events.
-pub(super) fn print_plan_json(plan: &DispatchPlan, parent_id: Option<&str>) {
-    let parent_id = parent_id.unwrap_or("all").to_string();
+pub(super) fn print_plan_json(
+    plan: &DispatchPlan,
+    target: &RunTarget,
+    runtime: Option<stream::RunRuntimeInfo>,
+) {
+    let parent_id = target.scope_label();
     let critical_path = compute_critical_path(&plan.all_units);
     let rounds: Vec<stream::RoundPlan> = plan
         .waves
@@ -311,6 +326,7 @@ pub(super) fn print_plan_json(plan: &DispatchPlan, parent_id: Option<&str>) {
         parent_id,
         rounds,
         critical_path,
+        runtime,
     });
 }
 
@@ -358,7 +374,7 @@ mod tests {
         child.to_file(mana_dir.join("1.1-child.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         let dispatched_ids: Vec<&str> = plan.waves[0]
@@ -375,7 +391,7 @@ mod tests {
         write_config(&mana_dir, Some("echo {id}"));
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         assert!(plan.waves.is_empty());
         assert!(plan.skipped.is_empty());
@@ -399,7 +415,7 @@ mod tests {
         unit2.to_file(mana_dir.join("2-task-two.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 2);
@@ -423,7 +439,8 @@ mod tests {
         unit2.to_file(mana_dir.join("2-task-two.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), false).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 1);
@@ -441,7 +458,8 @@ mod tests {
         unit.to_file(mana_dir.join("1-task-one.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), false).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units[0].model.as_deref(), Some("opus"));
@@ -470,7 +488,8 @@ mod tests {
         child2.to_file(mana_dir.join("1.2-child-two.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), false).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 2);
@@ -509,7 +528,55 @@ mod tests {
             .unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), false).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), false).unwrap();
+
+        assert_eq!(plan.waves.len(), 1);
+        let dispatched_ids: Vec<&str> = plan.waves[0]
+            .units
+            .iter()
+            .map(|unit| unit.id.as_str())
+            .collect();
+        assert_eq!(dispatched_ids, vec!["1.1.1", "1.2"]);
+    }
+
+    #[test]
+    fn plan_dispatch_explicit_target_set_unions_and_deduplicates() {
+        let (_dir, mana_dir) = make_mana_dir();
+        write_config(&mana_dir, Some("echo {id}"));
+
+        let parent = crate::unit::Unit::new("1", "Parent");
+        parent.to_file(mana_dir.join("1-parent.md")).unwrap();
+
+        let mut nested_parent = crate::unit::Unit::new("1.1", "Nested parent");
+        nested_parent.parent = Some("1".to_string());
+        nested_parent.verify = Some("echo ok".to_string());
+        nested_parent
+            .to_file(mana_dir.join("1.1-nested-parent.md"))
+            .unwrap();
+
+        let mut nested_leaf = crate::unit::Unit::new("1.1.1", "Nested leaf");
+        nested_leaf.parent = Some("1.1".to_string());
+        nested_leaf.verify = Some("echo ok".to_string());
+        nested_leaf
+            .to_file(mana_dir.join("1.1.1-nested-leaf.md"))
+            .unwrap();
+
+        let mut sibling_leaf = crate::unit::Unit::new("1.2", "Sibling leaf");
+        sibling_leaf.parent = Some("1".to_string());
+        sibling_leaf.verify = Some("echo ok".to_string());
+        sibling_leaf
+            .to_file(mana_dir.join("1.2-sibling-leaf.md"))
+            .unwrap();
+
+        let config = Config::load_with_extends(&mana_dir).unwrap();
+        let plan = plan_dispatch(
+            &mana_dir,
+            &config,
+            &RunTarget::Explicit(vec!["1".to_string(), "1.1.1".to_string()]),
+            false,
+        )
+        .unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         let dispatched_ids: Vec<&str> = plan.waves[0]
@@ -538,7 +605,7 @@ mod tests {
         unit.to_file(mana_dir.join("1-oversized.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 1);
@@ -558,7 +625,7 @@ mod tests {
         unit.to_file(mana_dir.join("1-unscoped.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 1);
@@ -578,7 +645,7 @@ mod tests {
         unit.to_file(mana_dir.join("1-well-scoped.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 1);
@@ -619,13 +686,15 @@ mod tests {
 
         // Without simulate: only wave 1 (1.1) is ready
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), false).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), false).unwrap();
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 1);
         assert_eq!(plan.waves[0].units[0].id, "1.1");
 
         // With simulate: all 3 waves shown
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), true).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), true).unwrap();
         assert_eq!(plan.waves.len(), 3);
         assert_eq!(plan.waves[0].units[0].id, "1.1");
         assert_eq!(plan.waves[1].units[0].id, "1.2");
@@ -657,12 +726,14 @@ mod tests {
 
         // Without simulate: only 1.1 is ready (1.2 blocked on requires)
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), false).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), false).unwrap();
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units[0].id, "1.1");
 
         // With simulate: both shown in correct wave order
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), true).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), true).unwrap();
         assert_eq!(plan.waves.len(), 2);
         assert_eq!(plan.waves[0].units[0].id, "1.1");
         assert_eq!(plan.waves[1].units[0].id, "1.2");
@@ -723,7 +794,8 @@ mod tests {
 
         // Simulate dry-run: shows all waves
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), true).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), true).unwrap();
 
         // Wave 1 should be: B(weight 3), C(weight 2), A(weight 1)
         assert_eq!(plan.waves[0].units.len(), 3);
@@ -754,7 +826,7 @@ mod tests {
         c.to_file(mana_dir.join("3-independent.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         // All 3 in wave 1 (no deps)
         assert_eq!(plan.waves.len(), 1);
@@ -793,7 +865,8 @@ mod tests {
         b.to_file(mana_dir.join("1.2-step-b.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, Some("1"), true).unwrap();
+        let plan =
+            plan_dispatch(&mana_dir, &config, &RunTarget::Unit("1".to_string()), true).unwrap();
 
         // The critical path computed from the plan must include both 1.1 and 1.2
         let critical_path = compute_critical_path(&plan.all_units);
@@ -829,7 +902,7 @@ mod tests {
         b.to_file(mana_dir.join("2-beta.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         // Both in wave 1; confirm conflict is detected
         assert_eq!(plan.waves.len(), 1);
@@ -862,7 +935,7 @@ mod tests {
         c.to_file(mana_dir.join("3-independent.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 3);
@@ -895,7 +968,7 @@ mod tests {
         c.to_file(mana_dir.join("3-c.md")).unwrap();
 
         let config = Config::load_with_extends(&mana_dir).unwrap();
-        let plan = plan_dispatch(&mana_dir, &config, None, false).unwrap();
+        let plan = plan_dispatch(&mana_dir, &config, &RunTarget::AllReady, false).unwrap();
 
         assert_eq!(plan.waves.len(), 1);
         assert_eq!(plan.waves[0].units.len(), 3);

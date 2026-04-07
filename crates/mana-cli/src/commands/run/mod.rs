@@ -74,6 +74,67 @@ pub struct RunArgs {
     pub review: bool,
 }
 
+/// Canonical run target semantics for CLI and native consumers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum RunTarget {
+    AllReady,
+    Unit(String),
+    Explicit(Vec<String>),
+}
+
+impl RunTarget {
+    pub fn from_cli_id(id: Option<String>) -> Self {
+        match id {
+            Some(id) => Self::Unit(id),
+            None => Self::AllReady,
+        }
+    }
+
+    pub fn scope_label(&self) -> String {
+        match self {
+            Self::AllReady => "all".to_string(),
+            Self::Unit(id) => id.clone(),
+            Self::Explicit(ids) => {
+                if ids.is_empty() {
+                    "all".to_string()
+                } else {
+                    ids.join(",")
+                }
+            }
+        }
+    }
+}
+
+/// Embedding-oriented run params.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeRunParams {
+    pub target: RunTarget,
+    pub jobs: u32,
+    pub dry_run: bool,
+    pub loop_mode: bool,
+    pub keep_going: bool,
+    pub timeout: u32,
+    pub idle_timeout: u32,
+    pub json_stream: bool,
+    pub review: bool,
+}
+
+impl From<RunArgs> for NativeRunParams {
+    fn from(args: RunArgs) -> Self {
+        Self {
+            target: RunTarget::from_cli_id(args.id),
+            jobs: args.jobs,
+            dry_run: args.dry_run,
+            loop_mode: args.loop_mode,
+            keep_going: args.keep_going,
+            timeout: args.timeout,
+            idle_timeout: args.idle_timeout,
+            json_stream: args.json_stream,
+            review: args.review,
+        }
+    }
+}
+
 /// What action to take for a unit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnitAction {
@@ -418,7 +479,6 @@ pub fn cmd_run(mana_dir: &Path, args: RunArgs) -> Result<()> {
         ref run_template, ..
     } = spawn_mode
     {
-        // Validate template exists (kept for backward compat error message)
         let _ = run_template;
 
         if let Some(ref run_model) = config.run_model {
@@ -431,11 +491,52 @@ pub fn cmd_run(mana_dir: &Path, args: RunArgs) -> Result<()> {
         }
     }
 
-    if args.loop_mode {
-        run_loop(mana_dir, &config, &args, &spawn_mode)
+    let params = NativeRunParams::from(args);
+    if params.loop_mode {
+        run_loop(mana_dir, &config, &params, &spawn_mode)
     } else {
-        run_once(mana_dir, &config, &args, &spawn_mode)
+        run_once(mana_dir, &config, &params, &spawn_mode)
     }
+}
+
+/// Execute mana orchestration through the embedding-oriented API and return structured run data.
+pub fn run_native(mana_dir: &Path, params: NativeRunParams) -> Result<RunView> {
+    let events: Arc<Mutex<Vec<StreamEvent>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink_events = Arc::clone(&events);
+    let _guard = stream::install_sink(Arc::new(move |event| {
+        if let Ok(mut buf) = sink_events.lock() {
+            buf.push(event.clone());
+        }
+    }));
+
+    // Install signal handlers for clean shutdown on Ctrl+C / SIGTERM
+    install_signal_handlers();
+
+    // Determine spawn mode
+    let config = Config::load_with_extends(mana_dir)?;
+    let spawn_mode = determine_spawn_mode(&config);
+
+    if spawn_mode == SpawnMode::Direct && !imp_available() && !pi_available() {
+        anyhow::bail!(
+            "No agent configured and neither `imp` nor `pi` found on PATH.\n\n\
+             Either:\n  \
+               1. Install imp (Rust): cargo install imp-cli\n  \
+               2. Install pi (Node): npm i -g @mariozechner/pi-coding-agent\n  \
+               3. Set a run template: mana config set run \"<command>\""
+        );
+    }
+
+    if params.loop_mode {
+        run_loop(mana_dir, &config, &params, &spawn_mode)?;
+    } else {
+        run_once(mana_dir, &config, &params, &spawn_mode)?;
+    }
+
+    let events = events.lock().map(|buf| buf.clone()).unwrap_or_default();
+    Ok(build_run_view_from_events(
+        events,
+        Some(detect_effective_runtime(&config, &spawn_mode)),
+    ))
 }
 
 /// Determine the spawn mode based on config.
@@ -476,21 +577,21 @@ fn pi_available() -> bool {
 fn run_once(
     mana_dir: &Path,
     config: &Config,
-    args: &RunArgs,
+    params: &NativeRunParams,
     spawn_mode: &SpawnMode,
 ) -> Result<()> {
     // Check for shutdown before starting execution
     if shutdown_requested() {
-        if !args.json_stream {
+        if !params.json_stream {
             eprintln!("\nShutdown signal received, aborting.");
         }
         return Ok(());
     }
 
-    let plan = plan_dispatch(mana_dir, config, args.id.as_deref(), args.dry_run)?;
+    let plan = plan_dispatch(mana_dir, config, &params.target, params.dry_run)?;
 
     if plan.waves.is_empty() && plan.skipped.is_empty() {
-        if args.json_stream {
+        if params.json_stream {
             stream::emit_error("No ready units");
         } else {
             eprintln!("No ready units. Use `mana status` to see what's going on.");
@@ -498,25 +599,44 @@ fn run_once(
         return Ok(());
     }
 
-    if args.dry_run {
-        if args.json_stream {
-            print_plan_json(&plan, args.id.as_deref());
+    if params.dry_run {
+        if params.json_stream {
+            print_plan_json(
+                &plan,
+                &params.target,
+                Some(detect_effective_runtime(config, spawn_mode).into()),
+            );
         } else {
             print_plan(&plan, config.run_model.as_deref());
+            if let Some(agent) = ready_queue::detect_direct_agent().map(|agent| match agent {
+                ready_queue::DirectAgent::Imp => "imp",
+                ready_queue::DirectAgent::Pi => "pi",
+            }) {
+                eprintln!(
+                    "Runtime: direct agent={} model={}",
+                    agent,
+                    config.run_model.as_deref().unwrap_or("default")
+                );
+            } else if let SpawnMode::Template { .. } = spawn_mode {
+                eprintln!(
+                    "Runtime: template mode model={}",
+                    config.run_model.as_deref().unwrap_or("default")
+                );
+            }
         }
         return Ok(());
     }
 
     let decision_warnings = collect_decision_warnings(mana_dir, &plan.all_units, &plan.index)?;
-    if !confirm_dispatch_with_decisions(&decision_warnings, args.json_stream)? {
-        if !args.json_stream {
+    if !confirm_dispatch_with_decisions(&decision_warnings, params.json_stream)? {
+        if !params.json_stream {
             eprintln!("Dispatch cancelled.");
         }
         return Ok(());
     }
 
     // Report blocked units (oversized/unscoped)
-    if !plan.skipped.is_empty() && !args.json_stream {
+    if !plan.skipped.is_empty() && !params.json_stream {
         eprintln!("{} unit(s) blocked:", plan.skipped.len());
         for bb in &plan.skipped {
             eprintln!("  ⚠ {}  {}  ({})", bb.id, bb.title, bb.reason);
@@ -526,9 +646,9 @@ fn run_once(
 
     let total_units: usize = plan.waves.iter().map(|w| w.units.len()).sum();
     let total_waves = plan.waves.len();
-    let parent_id = args.id.as_deref().unwrap_or("all");
+    let parent_id = params.target.scope_label();
 
-    if args.json_stream {
+    if params.json_stream {
         let units_info: Vec<stream::UnitInfo> = plan
             .waves
             .iter()
@@ -542,18 +662,19 @@ fn run_once(
             })
             .collect();
         stream::emit(&StreamEvent::RunStart {
-            parent_id: parent_id.to_string(),
+            parent_id,
             total_units,
             total_rounds: total_waves,
             units: units_info,
+            runtime: Some(detect_effective_runtime(config, spawn_mode).into()),
         });
     }
 
     let run_cfg = RunConfig {
-        max_jobs: args.jobs.min(config.max_concurrent) as usize,
-        timeout_minutes: args.timeout,
-        idle_timeout_minutes: args.idle_timeout,
-        json_stream: args.json_stream,
+        max_jobs: params.jobs.min(config.max_concurrent) as usize,
+        timeout_minutes: params.timeout,
+        idle_timeout_minutes: params.idle_timeout,
+        json_stream: params.json_stream,
         file_locking: config.file_locking,
         run_model: config.run_model.clone(),
         batch_verify: config.batch_verify,
@@ -569,7 +690,7 @@ fn run_once(
 
     match spawn_mode {
         SpawnMode::Direct => {
-            if !args.json_stream {
+            if !params.json_stream {
                 eprintln!("Dispatching {} unit(s)...", total_units);
             }
 
@@ -580,13 +701,13 @@ fn run_once(
                 &plan.all_units,
                 &plan.index,
                 &run_cfg,
-                args.keep_going,
+                params.keep_going,
             )?;
 
             for result in &results {
                 total_tokens += result.total_tokens.unwrap_or(0);
                 total_cost += result.total_cost.unwrap_or(0.0);
-                if args.json_stream {
+                if params.json_stream {
                     stream::emit(&StreamEvent::UnitDone {
                         id: result.id.clone(),
                         success: result.success,
@@ -615,7 +736,7 @@ fn run_once(
             if run_cfg.batch_verify {
                 match mana_core::ops::batch_verify::batch_verify(mana_dir) {
                     Ok(bv) => {
-                        if args.json_stream {
+                        if params.json_stream {
                             stream::emit(&StreamEvent::BatchVerify {
                                 commands_run: bv.commands_run,
                                 passed: bv.passed.clone(),
@@ -647,14 +768,14 @@ fn run_once(
             for (wave_idx, wave) in plan.waves.iter().enumerate() {
                 // Check for shutdown signal between waves
                 if shutdown_requested() {
-                    if !args.json_stream {
+                    if !params.json_stream {
                         eprintln!("\nShutdown signal received, stopping.");
                     }
                     had_failure = true;
                     break;
                 }
 
-                if args.json_stream {
+                if params.json_stream {
                     stream::emit(&StreamEvent::RoundStart {
                         round: wave_idx + 1,
                         total_rounds: total_waves,
@@ -674,7 +795,7 @@ fn run_once(
                     total_tokens += result.total_tokens.unwrap_or(0);
                     total_cost += result.total_cost.unwrap_or(0.0);
                     if result.success {
-                        if args.json_stream {
+                        if params.json_stream {
                             stream::emit(&StreamEvent::UnitDone {
                                 id: result.id.clone(),
                                 success: true,
@@ -691,7 +812,7 @@ fn run_once(
                         }
                         wave_success += 1;
                     } else {
-                        if args.json_stream {
+                        if params.json_stream {
                             stream::emit(&StreamEvent::UnitDone {
                                 id: result.id.clone(),
                                 success: false,
@@ -717,7 +838,7 @@ fn run_once(
 
                 template_results.extend(results);
 
-                if args.json_stream {
+                if params.json_stream {
                     stream::emit(&StreamEvent::RoundEnd {
                         round: wave_idx + 1,
                         success_count: wave_success,
@@ -725,7 +846,7 @@ fn run_once(
                     });
                 }
 
-                if had_failure && !args.keep_going {
+                if had_failure && !params.keep_going {
                     break;
                 }
             }
@@ -740,9 +861,9 @@ fn run_once(
 
     // Trigger adversarial review for each successfully closed unit if --review is set.
     // Review runs synchronously after all units in this pass complete.
-    if args.review && !successful_ids.is_empty() {
+    if params.review && !successful_ids.is_empty() {
         for id in &successful_ids {
-            if !args.json_stream {
+            if !params.json_stream {
                 eprintln!("Review: checking {} ...", id);
             }
             if let Err(e) = cmd_review(
@@ -758,7 +879,7 @@ fn run_once(
         }
     }
 
-    if args.json_stream {
+    if params.json_stream {
         stream::emit(&StreamEvent::RunEnd {
             total_success: outcome_counts.closed as usize,
             total_closed: outcome_counts.closed as usize,
@@ -792,7 +913,7 @@ fn run_once(
         eprintln!("{}", summary);
     }
 
-    if any_failed && !args.keep_going {
+    if any_failed && !params.keep_going {
         anyhow::bail!("Some agents failed");
     }
 
@@ -803,7 +924,7 @@ fn run_once(
 fn run_loop(
     mana_dir: &Path,
     config: &Config,
-    args: &RunArgs,
+    params: &NativeRunParams,
     _spawn_mode: &SpawnMode,
 ) -> Result<()> {
     let max_loops = if config.max_loops == 0 {
@@ -815,20 +936,20 @@ fn run_loop(
     for iteration in 0..max_loops {
         // Check for shutdown signal between loop iterations
         if shutdown_requested() {
-            if !args.json_stream {
+            if !params.json_stream {
                 eprintln!("\nShutdown signal received, stopping.");
             }
             return Ok(());
         }
 
-        if iteration > 0 && !args.json_stream {
+        if iteration > 0 && !params.json_stream {
             eprintln!("\n--- Loop iteration {} ---\n", iteration + 1);
         }
 
-        let plan = plan_dispatch(mana_dir, config, args.id.as_deref(), false)?;
+        let plan = plan_dispatch(mana_dir, config, &params.target, false)?;
 
         if plan.waves.is_empty() {
-            if !args.json_stream {
+            if !params.json_stream {
                 if iteration == 0 {
                     eprintln!("No ready units. Use `mana status` to see what's going on.");
                 } else {
@@ -838,26 +959,18 @@ fn run_loop(
             return Ok(());
         }
 
-        // Run one pass (non-loop, non-dry-run)
-        let inner_args = RunArgs {
-            id: args.id.clone(),
-            jobs: args.jobs,
-            dry_run: false,
+        let inner_params = NativeRunParams {
             loop_mode: false,
-            keep_going: args.keep_going,
-            timeout: args.timeout,
-            idle_timeout: args.idle_timeout,
-            json_stream: args.json_stream,
-            review: args.review,
+            ..params.clone()
         };
 
         // Reload config each iteration (agents may have changed units)
         let config = Config::load_with_extends(mana_dir)?;
         let spawn_mode = determine_spawn_mode(&config);
-        match run_once(mana_dir, &config, &inner_args, &spawn_mode) {
+        match run_once(mana_dir, &config, &inner_params, &spawn_mode) {
             Ok(()) => {}
             Err(e) => {
-                if args.keep_going {
+                if params.keep_going {
                     eprintln!("Warning: {}", e);
                 } else {
                     return Err(e);
@@ -936,7 +1049,7 @@ pub(super) fn format_duration(d: Duration) -> String {
     format!("{}:{:02}", secs / 60, secs % 60)
 }
 
-#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize, Default)]
 pub struct RunSummary {
     pub total_units: usize,
     pub total_rounds: usize,
@@ -963,22 +1076,38 @@ pub struct RunUnitStatus {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct RunRuntimeInfo {
+    pub direct_agent: Option<String>,
+    pub model: Option<String>,
+}
+
+impl From<RunRuntimeInfo> for stream::RunRuntimeInfo {
+    fn from(value: RunRuntimeInfo) -> Self {
+        Self {
+            direct_agent: value.direct_agent,
+            model: value.model,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RunView {
     pub summary: RunSummary,
     pub units: Vec<RunUnitStatus>,
     pub events: Vec<StreamEvent>,
+    pub runtime: Option<RunRuntimeInfo>,
 }
 
 /// Execute `mana run` programmatically and capture structured stream events.
-pub fn run_with_stream_capture(mana_dir: &Path, args: RunArgs) -> Result<RunView> {
-    run_with_stream_capture_and_sink(mana_dir, args, None)
+pub fn run_with_stream_capture(mana_dir: &Path, params: NativeRunParams) -> Result<RunView> {
+    run_with_stream_capture_and_sink(mana_dir, params, None)
 }
 
 /// Execute `mana run` programmatically, optionally forwarding live events to a sink.
 pub fn run_with_stream_capture_and_sink(
     mana_dir: &Path,
-    args: RunArgs,
+    params: NativeRunParams,
     sink: Option<stream::StreamSink>,
 ) -> Result<RunView> {
     let events: Arc<Mutex<Vec<StreamEvent>>> = Arc::new(Mutex::new(Vec::new()));
@@ -993,19 +1122,66 @@ pub fn run_with_stream_capture_and_sink(
         }
     }));
 
-    cmd_run(
-        mana_dir,
-        RunArgs {
-            json_stream: true,
-            ..args
-        },
-    )?;
+    // Install signal handlers for clean shutdown on Ctrl+C / SIGTERM
+    install_signal_handlers();
+
+    // Determine spawn mode
+    let config = Config::load_with_extends(mana_dir)?;
+    let spawn_mode = determine_spawn_mode(&config);
+
+    if spawn_mode == SpawnMode::Direct && !imp_available() && !pi_available() {
+        anyhow::bail!(
+            "No agent configured and neither `imp` nor `pi` found on PATH.\n\n\
+             Either:\n  \
+               1. Install imp (Rust): cargo install imp-cli\n  \
+               2. Install pi (Node): npm i -g @mariozechner/pi-coding-agent\n  \
+               3. Set a run template: mana config set run \"<command>\""
+        );
+    }
+
+    let params = NativeRunParams {
+        json_stream: true,
+        ..params
+    };
+
+    if params.loop_mode {
+        run_loop(mana_dir, &config, &params, &spawn_mode)?;
+    } else {
+        run_once(mana_dir, &config, &params, &spawn_mode)?;
+    }
 
     let events = events.lock().map(|buf| buf.clone()).unwrap_or_default();
-    Ok(build_run_view_from_events(events))
+    Ok(build_run_view_from_events(
+        events,
+        Some(detect_effective_runtime(&config, &spawn_mode)),
+    ))
 }
 
-fn build_run_view_from_events(events: Vec<StreamEvent>) -> RunView {
+fn detect_effective_runtime(config: &Config, spawn_mode: &SpawnMode) -> RunRuntimeInfo {
+    let direct_agent = match spawn_mode {
+        SpawnMode::Direct => ready_queue::detect_direct_agent().map(|agent| match agent {
+            ready_queue::DirectAgent::Imp => "imp".to_string(),
+            ready_queue::DirectAgent::Pi => "pi".to_string(),
+        }),
+        SpawnMode::Template { run_template, .. } => Some(if run_template.contains("imp") {
+            "imp".to_string()
+        } else if run_template.contains("pi") {
+            "pi".to_string()
+        } else {
+            "template".to_string()
+        }),
+    };
+
+    RunRuntimeInfo {
+        direct_agent,
+        model: config.run_model.clone(),
+    }
+}
+
+fn build_run_view_from_events(
+    events: Vec<StreamEvent>,
+    runtime: Option<RunRuntimeInfo>,
+) -> RunView {
     use std::collections::HashMap;
 
     let mut total_units = 0usize;
@@ -1148,6 +1324,7 @@ fn build_run_view_from_events(events: Vec<StreamEvent>) -> RunView {
         summary,
         units: unit_list,
         events,
+        runtime,
     }
 }
 
@@ -1193,6 +1370,12 @@ mod tests {
             json_stream: false,
             review: false,
         }
+    }
+
+    #[test]
+    fn run_target_scope_label_formats_explicit_targets() {
+        let target = RunTarget::Explicit(vec!["1".to_string(), "2.1".to_string()]);
+        assert_eq!(target.scope_label(), "1,2.1");
     }
 
     #[test]
@@ -1579,7 +1762,13 @@ mod tests {
             ..default_args()
         };
 
-        run_loop(&mana_dir, &config, &args, &determine_spawn_mode(&config)).unwrap();
+        run_loop(
+            &mana_dir,
+            &config,
+            &NativeRunParams::from(args),
+            &determine_spawn_mode(&config),
+        )
+        .unwrap();
 
         let intermediate = Unit::from_file(&mana_dir.join("1.1-intermediate.md")).unwrap();
         let nested_leaf = Unit::from_file(&mana_dir.join("1.1.1-nested-leaf.md")).unwrap();
