@@ -8,6 +8,26 @@ use mana_core::util::natural_cmp;
 use crate::memory;
 use crate::types::*;
 
+fn drain_progress_events(
+    progress_rx: &mpsc::Receiver<(String, AgentProgress)>,
+    event_tx: &mpsc::Sender<PoolEvent>,
+) {
+    while let Ok((unit_id, progress)) = progress_rx.try_recv() {
+        match progress {
+            AgentProgress::Progress { phase, elapsed } => {
+                let _ = event_tx.send(PoolEvent::Progress {
+                    unit_id,
+                    phase,
+                    elapsed,
+                });
+            }
+            AgentProgress::Heartbeat { elapsed } => {
+                let _ = event_tx.send(PoolEvent::Heartbeat { unit_id, elapsed });
+            }
+        }
+    }
+}
+
 /// Run a full dispatch cycle: schedule units respecting dependencies, concurrency,
 /// and memory limits. Spawns agents via the provided `Spawner` implementation.
 ///
@@ -43,6 +63,8 @@ pub fn run_dispatch(
 
     // Channel for completed agents to report back
     let (result_tx, result_rx) = mpsc::channel::<AgentResult>();
+    // Channel for progress emitted by running agents
+    let (progress_tx, progress_rx) = mpsc::channel::<(String, AgentProgress)>();
 
     // Compute downstream weights for critical-path prioritization
     let weight_map = compute_downstream_weights(units);
@@ -130,6 +152,7 @@ pub fn run_dispatch(
 
             // Spawn agent on a worker thread
             let tx = result_tx.clone();
+            let progress_tx_for_unit = progress_tx.clone();
             let cfg = SpawnConfig {
                 retry: unit.retry.clone(),
                 ..spawn_config.clone()
@@ -138,10 +161,12 @@ pub fn run_dispatch(
             let spawner_handle = Arc::clone(&spawner); // Arc<dyn Spawner> is Send
 
             std::thread::spawn(move || {
-                let result = spawner_handle.spawn(&unit_clone, &cfg);
+                let progress_sender = Some(progress_tx_for_unit);
+                let result = spawner_handle.spawn(&unit_clone, &cfg, progress_sender);
                 let _ = tx.send(result);
             });
             newly_started += 1;
+            drain_progress_events(&progress_rx, event_tx);
         }
 
         // Stuck detection: nothing running, nothing started
@@ -184,6 +209,7 @@ pub fn run_dispatch(
                         any_failed: true,
                     });
                 }
+                drain_progress_events(&progress_rx, event_tx);
                 match result_rx.recv_timeout(std::time::Duration::from_millis(200)) {
                     Ok(result) => break result,
                     Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -211,6 +237,7 @@ pub fn run_dispatch(
             let _ = event_tx.send(PoolEvent::Completed {
                 result: result.clone(),
             });
+            drain_progress_events(&progress_rx, event_tx);
 
             if success {
                 completed.insert(unit_id);
@@ -247,10 +274,12 @@ pub fn run_dispatch(
 
     // Drain any straggler results
     drop(result_tx);
+    drain_progress_events(&progress_rx, event_tx);
     while let Ok(result) = result_rx.try_recv() {
         let _ = event_tx.send(PoolEvent::Completed {
             result: result.clone(),
         });
+        drain_progress_events(&progress_rx, event_tx);
         results.push(result);
     }
 
@@ -412,7 +441,12 @@ mod tests {
     }
 
     impl Spawner for MockSpawner {
-        fn spawn(&self, unit: &DispatchUnit, _config: &SpawnConfig) -> AgentResult {
+        fn spawn(
+            &self,
+            unit: &DispatchUnit,
+            _config: &SpawnConfig,
+            _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+        ) -> AgentResult {
             self.spawn_count.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(Duration::from_millis(10));
             AgentResult {
@@ -547,7 +581,12 @@ mod tests {
     fn spawner_receives_attempt_count() {
         struct AssertRetry;
         impl Spawner for AssertRetry {
-            fn spawn(&self, unit: &DispatchUnit, config: &SpawnConfig) -> AgentResult {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
                 assert_eq!(unit.retry.attempt_number, 2);
                 assert_eq!(config.retry.attempt_number, 2);
                 AgentResult {
@@ -588,7 +627,12 @@ mod tests {
     fn spawner_receives_previous_failure_and_notes() {
         struct AssertFailure;
         impl Spawner for AssertFailure {
-            fn spawn(&self, unit: &DispatchUnit, config: &SpawnConfig) -> AgentResult {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
                 assert_eq!(
                     unit.retry.previous_failure.as_deref(),
                     Some("tests failed in auth flow")
@@ -636,10 +680,116 @@ mod tests {
     }
 
     #[test]
+    fn progress_events_forwarded() {
+        struct ProgressSpawner;
+        impl Spawner for ProgressSpawner {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                if let Some(tx) = progress_tx {
+                    let _ = tx.send((
+                        unit.id.clone(),
+                        AgentProgress::Progress {
+                            phase: "planning".to_string(),
+                            elapsed: Duration::from_millis(5),
+                        },
+                    ));
+                    let _ = tx.send((
+                        unit.id.clone(),
+                        AgentProgress::Heartbeat {
+                            elapsed: Duration::from_millis(7),
+                        },
+                    ));
+                }
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(10),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let units = vec![unit("1", &[])];
+        let (event_tx, event_rx) = mpsc::channel();
+        let outcome = run_dispatch(
+            &pool_config(),
+            &units,
+            &HashSet::new(),
+            Arc::new(ProgressSpawner),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+        assert_eq!(outcome.results.len(), 1);
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        assert!(events.iter().any(|e| matches!(
+            e,
+            PoolEvent::Progress { unit_id, phase, .. } if unit_id == "1" && phase == "planning"
+        )));
+        assert!(events.iter().any(|e| matches!(
+            e,
+            PoolEvent::Heartbeat { unit_id, .. } if unit_id == "1"
+        )));
+    }
+
+    #[test]
+    fn no_progress_channel_still_works() {
+        struct NoProgressSpawner;
+        impl Spawner for NoProgressSpawner {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let (event_tx, _event_rx) = mpsc::channel();
+        let outcome = run_dispatch(
+            &pool_config(),
+            &[unit("1", &[])],
+            &HashSet::new(),
+            Arc::new(NoProgressSpawner),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+        assert_eq!(outcome.results.len(), 1);
+    }
+
+    #[test]
     fn first_attempt_has_zero_attempts() {
         struct AssertFirst;
         impl Spawner for AssertFirst {
-            fn spawn(&self, unit: &DispatchUnit, config: &SpawnConfig) -> AgentResult {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
                 assert_eq!(unit.retry.attempt_number, 0);
                 assert_eq!(config.retry.attempt_number, 0);
                 assert!(unit.retry.previous_failure.is_none());
@@ -676,7 +826,12 @@ mod tests {
     fn stops_on_failure_without_keep_going() {
         struct FailSecond(AtomicUsize);
         impl Spawner for FailSecond {
-            fn spawn(&self, unit: &DispatchUnit, _config: &SpawnConfig) -> AgentResult {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
                 let n = self.0.fetch_add(1, Ordering::SeqCst);
                 AgentResult {
                     unit_id: unit.id.clone(),

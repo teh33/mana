@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::time::Duration;
 
 /// Retry context for a unit being dispatched.
@@ -83,6 +84,16 @@ pub enum PoolEvent {
         wave: usize,
     },
 
+    /// Agent emitted progress while running.
+    Progress {
+        unit_id: String,
+        phase: String,
+        elapsed: Duration,
+    },
+
+    /// Agent emitted a heartbeat while running.
+    Heartbeat { unit_id: String, elapsed: Duration },
+
     /// An agent completed (success or failure).
     Completed { result: AgentResult },
 
@@ -117,6 +128,12 @@ pub struct DispatchOutcome {
     pub any_failed: bool,
 }
 
+#[derive(Debug, Clone)]
+pub enum AgentProgress {
+    Progress { phase: String, elapsed: Duration },
+    Heartbeat { elapsed: Duration },
+}
+
 /// Trait for spawning agents. Implementations control how agent processes
 /// are actually started (CLI invokes pi/imp, daemon might use a different
 /// strategy, tests can mock).
@@ -124,7 +141,12 @@ pub struct DispatchOutcome {
 /// `spawn` is called from a worker thread — implementations must be Send + Sync.
 /// The function should block until the agent completes and return the result.
 pub trait Spawner: Send + Sync {
-    fn spawn(&self, unit: &DispatchUnit, config: &SpawnConfig) -> AgentResult;
+    fn spawn(
+        &self,
+        unit: &DispatchUnit,
+        config: &SpawnConfig,
+        progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+    ) -> AgentResult;
 }
 
 /// Per-spawn configuration passed to the Spawner.
