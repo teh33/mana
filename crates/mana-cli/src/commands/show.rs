@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use mana_core::ops::context::summarize_child_units;
 use mana_core::ops::show as ops_show;
 use termimad::MadSkin;
 
@@ -20,6 +21,7 @@ const MAX_OUTPUT_LINES: usize = 50;
 pub fn cmd_show(id: &str, json: bool, short: bool, history: bool, mana_dir: &Path) -> Result<()> {
     let result = ops_show::get(mana_dir, id)?;
     let unit = result.unit;
+    let child_summaries = summarize_child_units(mana_dir, id);
 
     if short {
         println!("{}", format_short(&unit));
@@ -27,14 +29,18 @@ pub fn cmd_show(id: &str, json: bool, short: bool, history: bool, mana_dir: &Pat
         let json_str = serde_json::to_string_pretty(&unit)?;
         println!("{}", json_str);
     } else {
-        render_unit(&unit, history)?;
+        render_unit(&unit, &child_summaries, history)?;
     }
 
     Ok(())
 }
 
 /// Render a unit beautifully with metadata header and formatted markdown body
-fn render_unit(unit: &Unit, show_all_history: bool) -> Result<()> {
+fn render_unit(
+    unit: &Unit,
+    child_summaries: &[mana_core::ops::context::ChildSummary],
+    show_all_history: bool,
+) -> Result<()> {
     let skin = MadSkin::default();
 
     // Print metadata header
@@ -84,6 +90,24 @@ fn render_unit(unit: &Unit, show_all_history: bool) -> Result<()> {
         println!("\n**Notes**");
         let formatted = skin.term_text(notes);
         println!("{}", formatted);
+    }
+
+    if !child_summaries.is_empty() {
+        println!("\n**Child Job Summaries**");
+        for child in child_summaries {
+            let mut line = format!("- {} [{}]", child.id, child.status);
+            if let Some(outcome) = &child.recent_outcome {
+                line.push_str(&format!(" recent={}", outcome));
+            }
+            line.push_str(&format!(": {}", child.title));
+            println!("{}", line);
+            if let Some(summary) = &child.summary {
+                println!("  summary: {}", summary);
+            }
+            if let Some(follow_up) = &child.follow_up {
+                println!("  follow-up: {}", follow_up);
+            }
+        }
     }
 
     // Print outputs
@@ -717,7 +741,7 @@ mod tests {
     fn outputs_not_shown_when_none() {
         let unit = Unit::new("1", "No outputs");
         // render_unit prints to stdout; just verify it doesn't panic
-        let result = render_unit(&unit, false);
+        let result = render_unit(&unit, &[], false);
         assert!(result.is_ok());
     }
 
@@ -758,7 +782,7 @@ mod tests {
         let mut unit = Unit::new("1", "Big outputs");
         unit.outputs = Some(big_obj);
         // Just verify render_unit doesn't panic and works
-        let result = render_unit(&unit, false);
+        let result = render_unit(&unit, &[], false);
         assert!(result.is_ok());
     }
 }

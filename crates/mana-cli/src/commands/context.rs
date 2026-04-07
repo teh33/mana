@@ -124,6 +124,32 @@ fn format_structure_block(structures: &[(&str, String)]) -> Option<String> {
     ))
 }
 
+/// Format child job summaries into a compact context section.
+fn format_child_summaries_section(children: &[mana_core::ops::context::ChildSummary]) -> Option<String> {
+    if children.is_empty() {
+        return None;
+    }
+
+    let mut s = String::new();
+    s.push_str("═══ Child Job Summaries ═════════════════════════════════════\n");
+    for child in children {
+        let mut line = format!("{} [{}]", child.id, child.status);
+        if let Some(outcome) = &child.recent_outcome {
+            line.push_str(&format!(" recent={}", outcome));
+        }
+        line.push_str(&format!(": {}\n", child.title));
+        s.push_str(&line);
+        if let Some(summary) = &child.summary {
+            s.push_str(&format!("  summary: {}\n", summary));
+        }
+        if let Some(follow_up) = &child.follow_up {
+            s.push_str(&format!("  follow-up: {}\n", follow_up));
+        }
+    }
+    s.push_str("═════════════════════════════════════════════════════════════\n\n");
+    Some(s)
+}
+
 // ─── Command ─────────────────────────────────────────────────────────────────
 
 /// Assemble complete agent context for a unit — the single source of truth.
@@ -261,6 +287,7 @@ fn output_json(ctx: &AgentContext, structure_only: bool) -> Result<()> {
         "parent": unit.parent,
         "files": files,
         "dependency_context": dep_json,
+        "child_summaries": ctx.child_summaries,
     });
     if let Some(ref rules_content) = ctx.rules {
         obj["rules"] = serde_json::Value::String(rules_content.clone());
@@ -294,7 +321,12 @@ fn output_text(ctx: &AgentContext, project_dir: &Path, structure_only: bool) -> 
         output.push_str(&dep_section);
     }
 
-    // 5. Structural summaries
+    // 5. Child summaries
+    if let Some(child_section) = format_child_summaries_section(&ctx.child_summaries) {
+        output.push_str(&child_section);
+    }
+
+    // 6. Structural summaries
     let structure_pairs: Vec<(&str, String)> = ctx
         .files
         .iter()
@@ -455,6 +487,24 @@ mod tests {
             },
         ];
         unit
+    }
+
+    #[test]
+    fn format_child_summaries_section_renders_parent_rollup() {
+        let section = format_child_summaries_section(&[mana_core::ops::context::ChildSummary {
+            id: "1.1".to_string(),
+            title: "Child".to_string(),
+            status: "open".to_string(),
+            recent_outcome: Some("failed".to_string()),
+            summary: Some("Found a parser edge case".to_string()),
+            follow_up: Some("1 unresolved decision(s)".to_string()),
+        }])
+        .unwrap();
+
+        assert!(section.contains("Child Job Summaries"));
+        assert!(section.contains("1.1 [open] recent=failed: Child"));
+        assert!(section.contains("summary: Found a parser edge case"));
+        assert!(section.contains("follow-up: 1 unresolved decision(s)"));
     }
 
     #[test]
