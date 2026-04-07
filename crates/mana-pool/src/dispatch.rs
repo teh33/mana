@@ -11,8 +11,12 @@ use crate::types::*;
 fn drain_progress_events(
     progress_rx: &mpsc::Receiver<(String, AgentProgress)>,
     event_tx: &mpsc::Sender<PoolEvent>,
+    running_last_progress: &mut HashMap<String, Instant>,
+    running_stuck_emitted: &mut HashSet<String>,
 ) {
     while let Ok((unit_id, progress)) = progress_rx.try_recv() {
+        running_last_progress.insert(unit_id.clone(), Instant::now());
+        running_stuck_emitted.remove(&unit_id);
         match progress {
             AgentProgress::Progress { phase, elapsed } => {
                 let _ = event_tx.send(PoolEvent::Progress {
@@ -24,6 +28,27 @@ fn drain_progress_events(
             AgentProgress::Heartbeat { elapsed } => {
                 let _ = event_tx.send(PoolEvent::Heartbeat { unit_id, elapsed });
             }
+        }
+    }
+}
+
+fn emit_stuck_events(
+    event_tx: &mpsc::Sender<PoolEvent>,
+    running_last_progress: &HashMap<String, Instant>,
+    running_stuck_emitted: &mut HashSet<String>,
+    idle_timeout: std::time::Duration,
+) {
+    if idle_timeout.is_zero() {
+        return;
+    }
+    for (unit_id, last_seen) in running_last_progress {
+        let elapsed = last_seen.elapsed();
+        if elapsed >= idle_timeout && !running_stuck_emitted.contains(unit_id) {
+            let _ = event_tx.send(PoolEvent::AgentStuck {
+                unit_id: unit_id.clone(),
+                last_progress_secs_ago: elapsed.as_secs(),
+            });
+            running_stuck_emitted.insert(unit_id.clone());
         }
     }
 }
@@ -47,6 +72,28 @@ pub fn run_dispatch(
     event_tx: &mpsc::Sender<PoolEvent>,
     shutdown: &dyn Fn() -> bool,
 ) -> Result<DispatchOutcome> {
+    run_dispatch_with_options(
+        config,
+        units,
+        completed_ids,
+        spawner,
+        event_tx,
+        shutdown,
+        std::time::Duration::from_millis(200),
+        None,
+    )
+}
+
+fn run_dispatch_with_options(
+    config: &PoolConfig,
+    units: &[DispatchUnit],
+    completed_ids: &HashSet<String>,
+    spawner: Arc<dyn Spawner>,
+    event_tx: &mpsc::Sender<PoolEvent>,
+    shutdown: &dyn Fn() -> bool,
+    poll_interval: std::time::Duration,
+    idle_timeout_override: Option<std::time::Duration>,
+) -> Result<DispatchOutcome> {
     let started = Instant::now();
     let all_ids: HashSet<String> = units.iter().map(|u| u.id.clone()).collect();
     let mut completed = completed_ids.clone();
@@ -56,6 +103,9 @@ pub fn run_dispatch(
     let mut results: Vec<AgentResult> = Vec::new();
     let mut running_count: usize = 0;
     let mut any_failed = false;
+    let idle_timeout = idle_timeout_override.unwrap_or_else(|| {
+        std::time::Duration::from_secs((config.idle_timeout_minutes as u64) * 60)
+    });
 
     // Track file paths of running units to avoid scheduling conflicts
     let mut running_paths: HashSet<String> = HashSet::new();
@@ -65,6 +115,10 @@ pub fn run_dispatch(
     let (result_tx, result_rx) = mpsc::channel::<AgentResult>();
     // Channel for progress emitted by running agents
     let (progress_tx, progress_rx) = mpsc::channel::<(String, AgentProgress)>();
+
+    // Track last progress/heartbeat time and whether we've already emitted a stuck event.
+    let mut running_last_progress: HashMap<String, Instant> = HashMap::new();
+    let mut running_stuck_emitted: HashSet<String> = HashSet::new();
 
     // Compute downstream weights for critical-path prioritization
     let weight_map = compute_downstream_weights(units);
@@ -142,6 +196,8 @@ pub fn run_dispatch(
                 running_paths.insert(p.clone());
             }
             running_unit_paths.insert(unit.id.clone(), unit.paths.clone());
+            running_last_progress.insert(unit.id.clone(), Instant::now());
+            running_stuck_emitted.remove(&unit.id);
 
             let wave = wave_map.get(&unit.id).copied().unwrap_or(1);
             let _ = event_tx.send(PoolEvent::Spawning {
@@ -166,7 +222,12 @@ pub fn run_dispatch(
                 let _ = tx.send(result);
             });
             newly_started += 1;
-            drain_progress_events(&progress_rx, event_tx);
+            drain_progress_events(
+                &progress_rx,
+                event_tx,
+                &mut running_last_progress,
+                &mut running_stuck_emitted,
+            );
         }
 
         // Stuck detection: nothing running, nothing started
@@ -189,7 +250,7 @@ pub fn run_dispatch(
                 if shutdown() {
                     // Drain remaining results without spawning more
                     while running_count > 0 {
-                        if let Ok(r) = result_rx.recv_timeout(std::time::Duration::from_millis(100))
+                        if let Ok(r) = result_rx.recv_timeout(poll_interval)
                         {
                             running_count -= 1;
                             let _ = event_tx.send(PoolEvent::Completed { result: r.clone() });
@@ -209,8 +270,19 @@ pub fn run_dispatch(
                         any_failed: true,
                     });
                 }
-                drain_progress_events(&progress_rx, event_tx);
-                match result_rx.recv_timeout(std::time::Duration::from_millis(200)) {
+                drain_progress_events(
+                    &progress_rx,
+                    event_tx,
+                    &mut running_last_progress,
+                    &mut running_stuck_emitted,
+                );
+                emit_stuck_events(
+                    event_tx,
+                    &running_last_progress,
+                    &mut running_stuck_emitted,
+                    idle_timeout,
+                );
+                match result_rx.recv_timeout(poll_interval) {
                     Ok(result) => break result,
                     Err(mpsc::RecvTimeoutError::Timeout) => continue,
                     Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -223,6 +295,9 @@ pub fn run_dispatch(
             };
 
             running_count -= 1;
+
+            running_last_progress.remove(&result.unit_id);
+            running_stuck_emitted.remove(&result.unit_id);
 
             // Release paths
             if let Some(paths) = running_unit_paths.remove(&result.unit_id) {
@@ -237,7 +312,12 @@ pub fn run_dispatch(
             let _ = event_tx.send(PoolEvent::Completed {
                 result: result.clone(),
             });
-            drain_progress_events(&progress_rx, event_tx);
+            drain_progress_events(
+        &progress_rx,
+        event_tx,
+        &mut running_last_progress,
+        &mut running_stuck_emitted,
+    );
 
             if success {
                 completed.insert(unit_id);
@@ -274,12 +354,22 @@ pub fn run_dispatch(
 
     // Drain any straggler results
     drop(result_tx);
-    drain_progress_events(&progress_rx, event_tx);
+    drain_progress_events(
+        &progress_rx,
+        event_tx,
+        &mut running_last_progress,
+        &mut running_stuck_emitted,
+    );
     while let Ok(result) = result_rx.try_recv() {
         let _ = event_tx.send(PoolEvent::Completed {
             result: result.clone(),
         });
-        drain_progress_events(&progress_rx, event_tx);
+        drain_progress_events(
+            &progress_rx,
+            event_tx,
+            &mut running_last_progress,
+            &mut running_stuck_emitted,
+        );
         results.push(result);
     }
 
@@ -778,6 +868,54 @@ mod tests {
         )
         .unwrap();
         assert_eq!(outcome.results.len(), 1);
+    }
+
+    #[test]
+    fn heartbeat_timeout_detects_stuck_agent() {
+        struct SilentSlowSpawner;
+        impl Spawner for SilentSlowSpawner {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                std::thread::sleep(Duration::from_millis(120));
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(120),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let config = pool_config();
+        let units = vec![unit("1", &[])];
+        let (event_tx, event_rx) = mpsc::channel();
+        let outcome = run_dispatch_with_options(
+            &config,
+            &units,
+            &HashSet::new(),
+            Arc::new(SilentSlowSpawner),
+            &event_tx,
+            &|| false,
+            Duration::from_millis(20),
+            Some(Duration::from_millis(50)),
+        )
+        .unwrap();
+        assert_eq!(outcome.results.len(), 1);
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        assert!(events.iter().any(|e| matches!(
+            e,
+            PoolEvent::AgentStuck { unit_id, .. } if unit_id == "1"
+        )));
     }
 
     #[test]
