@@ -10,6 +10,8 @@ description: >
 
 Mana is a task tracker for AI agents where jobs, epics, and facts share the same durable substrate. Jobs have a **verify gate** — a shell command that must exit 0 to close. `mana run` dispatches ready jobs to agents, while epics organize larger efforts and facts capture verified project knowledge.
 
+Mana speaks publicly in terms of epics, jobs, and facts.
+
 **For syntax and examples:** `mana --help` or `mana <command> --help`
 
 ## When to Create

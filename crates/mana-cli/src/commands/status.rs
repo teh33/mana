@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::blocking::{check_blocked, check_scope_warning, BlockReason};
 use crate::index::{ArchiveIndex, Index, IndexEntry};
-use crate::unit::Status;
+use crate::unit::{Status, UnitKind};
 use crate::util::natural_cmp;
 
 /// Agent status parsed from claimed_by field
@@ -76,11 +76,12 @@ struct BlockedEntry {
 struct StatusOutput {
     claimed: Vec<StatusEntry>,
     ready: Vec<IndexEntry>,
+    epics: Vec<IndexEntry>,
     goals: Vec<IndexEntry>,
     blocked: Vec<BlockedEntry>,
 }
 
-/// Show complete work picture: claimed, ready, goals (need decomposition), and blocked units
+/// Show complete work picture: claimed work, ready jobs, epics, and blocked units
 pub fn cmd_status(json: bool, mana_dir: &Path) -> Result<()> {
     let index = Index::load_or_rebuild(mana_dir)?;
 
@@ -88,6 +89,7 @@ pub fn cmd_status(json: bool, mana_dir: &Path) -> Result<()> {
     let mut features: Vec<&IndexEntry> = Vec::new();
     let mut claimed: Vec<&IndexEntry> = Vec::new();
     let mut ready: Vec<&IndexEntry> = Vec::new();
+    let mut epics: Vec<&IndexEntry> = Vec::new();
     let mut goals: Vec<&IndexEntry> = Vec::new();
     let mut blocked: Vec<(&IndexEntry, BlockReason)> = Vec::new();
 
@@ -103,6 +105,8 @@ pub fn cmd_status(json: bool, mana_dir: &Path) -> Result<()> {
             Status::Open => {
                 if let Some(reason) = check_blocked(entry, &index) {
                     blocked.push((entry, reason));
+                } else if entry.kind == UnitKind::Epic {
+                    epics.push(entry);
                 } else if entry.has_verify {
                     ready.push(entry);
                 } else {
@@ -116,6 +120,7 @@ pub fn cmd_status(json: bool, mana_dir: &Path) -> Result<()> {
     sort_units(&mut features);
     sort_units(&mut claimed);
     sort_units(&mut ready);
+    sort_units(&mut epics);
     sort_units(&mut goals);
     blocked.sort_by(|(a, _), (b, _)| match a.priority.cmp(&b.priority) {
         std::cmp::Ordering::Equal => natural_cmp(&a.id, &b.id),
@@ -130,6 +135,7 @@ pub fn cmd_status(json: bool, mana_dir: &Path) -> Result<()> {
                 .map(StatusEntry::from_entry)
                 .collect(),
             ready: ready.into_iter().cloned().collect(),
+            epics: epics.into_iter().cloned().collect(),
             goals: goals.into_iter().cloned().collect(),
             blocked: blocked
                 .iter()
@@ -210,7 +216,7 @@ pub fn cmd_status(json: bool, mana_dir: &Path) -> Result<()> {
         }
         println!();
 
-        println!("## Ready ({})", ready.len());
+        println!("## Ready Jobs ({})", ready.len());
         if ready.is_empty() {
             println!("  (none)");
         } else {
@@ -219,6 +225,16 @@ pub fn cmd_status(json: bool, mana_dir: &Path) -> Result<()> {
                     .map(|w| format!("  (⚠ {})", w))
                     .unwrap_or_default();
                 println!("  {} [ ] {}{}", entry.id, entry.title, warning);
+            }
+        }
+        println!();
+
+        println!("## Epics ({})", epics.len());
+        if epics.is_empty() {
+            println!("  (none)");
+        } else {
+            for entry in epics {
+                println!("  {} [~] {}", entry.id, entry.title);
             }
         }
         println!();
@@ -252,3 +268,42 @@ fn sort_units(units: &mut Vec<&IndexEntry>) {
         other => other,
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::unit::{Status, Unit, UnitKind};
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn setup_test_mana_dir() -> (TempDir, std::path::PathBuf) {
+        let dir = TempDir::new().unwrap();
+        let mana_dir = dir.path().join(".mana");
+        fs::create_dir(&mana_dir).unwrap();
+        (dir, mana_dir)
+    }
+
+    #[test]
+    fn test_status_shows_epics_section() {
+        let (_dir, mana_dir) = setup_test_mana_dir();
+
+        let mut epic = Unit::new("1", "Epic parent");
+        epic.kind = UnitKind::Epic;
+        epic.to_file(mana_dir.join("1.yaml")).unwrap();
+
+        let mut job = Unit::new("2", "Ready job");
+        job.kind = UnitKind::Job;
+        job.verify = Some("true".to_string());
+        job.to_file(mana_dir.join("2.yaml")).unwrap();
+
+        let index = Index::load_or_rebuild(&mana_dir).unwrap();
+        let epic_entry = index.units.iter().find(|e| e.id == "1").unwrap();
+        let job_entry = index.units.iter().find(|e| e.id == "2").unwrap();
+
+        assert_eq!(epic_entry.kind, UnitKind::Epic);
+        assert_eq!(epic_entry.status, Status::Open);
+        assert_eq!(job_entry.kind, UnitKind::Job);
+        assert!(job_entry.has_verify);
+    }
+}
+

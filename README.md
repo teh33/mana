@@ -50,10 +50,12 @@ Agents come and go. Mana keeps the work legible.
 
 ## The core model
 
+Mana teaches a public model of **epics, jobs, and facts**.
+
 Mana tracks three main kinds of work records:
 
 ### Job
-A **job** is one executable piece of work.
+A **job** is one executable task.
 
 It has:
 - an ID
@@ -66,6 +68,8 @@ Jobs are what `mana run` dispatches to agents.
 
 ### Epic
 An **epic** is a parent/grouping record for larger work.
+
+Epics group and decompose larger efforts.
 
 Epics help you:
 - decompose larger efforts into child jobs

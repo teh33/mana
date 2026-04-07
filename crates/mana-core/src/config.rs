@@ -119,11 +119,11 @@ pub struct Config {
     #[serde(default = "default_auto_close_parent")]
     pub auto_close_parent: bool,
     /// Shell command template for `--run`. Use `{id}` as placeholder for unit ID.
-    /// Example: `claude -p "implement unit {id} and run mana close {id}"`.
+    /// Example: `claude -p "implement job {id} and run mana close {id}"`.
     /// If unset, `--run` will print an error asking the user to configure it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run: Option<String>,
-    /// Shell command template for planning large units. Uses `{id}` placeholder.
+    /// Shell command template for planning large epics. Uses `{id}` placeholder.
     /// If unset, plan operations will print an error asking the user to configure it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan: Option<String>,
@@ -191,15 +191,15 @@ pub struct Config {
     /// Keep `{id}` in the template so `mana diff <id>` can find the unit's commit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commit_template: Option<String>,
-    /// Shell command template for project-level research (`mana plan` with no ID).
+    /// Shell command template for project-level research (`mana plan` with no epic ID).
     /// Uses `{parent_id}` as placeholder for the parent unit that groups findings.
     /// Falls back to `plan` template with a research-oriented prompt if unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub research: Option<String>,
-    /// Model to use for implementing units (`mana run`). Substituted into `{model}` in templates.
+    /// Model to use for implementing jobs (`mana run`). Substituted into `{model}` in templates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_model: Option<String>,
-    /// Model to use for planning/splitting (`mana plan`). Substituted into `{model}` in templates.
+    /// Model to use for planning/splitting epics (`mana plan`). Substituted into `{model}` in templates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_model: Option<String>,
     /// Model to use for adversarial review (`mana run --review`). Substituted into `{model}` in templates.

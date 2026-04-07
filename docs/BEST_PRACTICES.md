@@ -6,12 +6,12 @@ A walkthrough guide for agents (and developers) on creating, executing, and mana
 
 ## Table of Contents
 
-1. [When to Create a Unit](#when-to-create-a-unit)
-2. [Unit Anatomy](#unit-anatomy)
-3. [Creating Effective Mana](#creating-effective-units)
+1. [When to Create a Job, Epic, or Fact](#when-to-create-a-job-epic-or-fact)
+2. [Job Anatomy](#job-anatomy)
+3. [Creating Effective Jobs](#creating-effective-jobs)
 4. [Writing Descriptions That Agents Can Execute](#writing-descriptions-that-agents-can-execute)
 5. [Acceptance Criteria & Verification](#acceptance-criteria--verification)
-6. [Splitting Work Into Subtasks](#splitting-work-into-subtasks)
+6. [Splitting Work Into Child Jobs](#splitting-work-into-child-jobs)
 7. [The Agent Workflow](#the-agent-workflow)
 8. [Dependency Management](#dependency-management)
 9. [Common Mistakes & How to Avoid Them](#common-mistakes--how-to-avoid-them)
@@ -22,6 +22,8 @@ A walkthrough guide for agents (and developers) on creating, executing, and mana
 ## When to Create a Job, Epic, or Fact
 
 Create a **job** when the work needs **tracking, verification, or delegation**.
+
+Jobs are executable tasks.
 
 ### Create a job when:
 

@@ -27,7 +27,7 @@ Usage: {usage}
 Commands:
   TASKS
     init         Initialize .mana/ in the current directory
-    create       Create a new unit [aliases: new]
+    create       Create a new job or epic [aliases: new]
     read         Display full unit details [aliases: show, view]
     list         List/search/filter units [aliases: ls]
     edit         Edit unit in $EDITOR
@@ -36,14 +36,14 @@ Commands:
     delete       Delete a unit and clean up references
 
   QUERY
-    status       Show project status: claimed, ready, and blocked units
+    status       Show project status: claimed, ready jobs, epics, and blocked units
     next         Recommend the best unit to work on next
     tree         Show hierarchical tree of units
-    context      Output context for a unit, or memory context (no args)
+    context      Output context for a job, epic, or memory (no args)
 
   AGENTS
-    run          Dispatch ready units to agents
-    plan         Decompose a unit into smaller children
+    run          Dispatch ready jobs to agents
+    plan         Decompose an epic into smaller jobs
     agents       Show running and recently completed agents
     logs         View agent output from log files
     review       Post-close review of an implementation
@@ -70,7 +70,7 @@ Commands:
 Getting started:
   mana init                                         Initialize .mana/ in this directory
   mana create \"fix bug\" --verify \"cargo test auth\"  Create a task with a verify gate
-  mana run                                          Dispatch ready units to agents
+  mana run                                          Dispatch ready jobs to agents
   mana status                                       See what's in flight
 
 See 'mana <command> --help' for details and examples."
@@ -150,7 +150,7 @@ Examples:
         dir: std::path::PathBuf,
     },
 
-    /// Create a new unit
+    /// Create a new job or epic
     ///
     /// Every unit needs a verify gate (--verify) — a shell command that must exit 0
     /// to close the unit. The --description is the agent's prompt when dispatched via
@@ -480,7 +480,7 @@ Examples:
         command: DepCommand,
     },
     // -- QUERY --
-    /// Show project status: claimed, ready, and blocked units
+    /// Show project status: claimed, ready jobs, epics, and blocked units
     ///
     /// Quick overview of what's in flight, what's ready for dispatch, and what's
     /// waiting on dependencies. Start here to understand project state.
@@ -521,7 +521,7 @@ Examples:
         no_json: bool,
     },
 
-    /// Output context for a unit, or memory context (no args)
+    /// Output context for a job, epic, or memory context (no args)
     ///
     /// With a unit ID: outputs complete agent context — unit spec, verify command,
     /// previous attempts, project rules, dependency context, and referenced file
@@ -784,7 +784,7 @@ Examples:
         children: Vec<String>,
     },
 
-    /// Dispatch ready units to agents
+    /// Dispatch ready jobs to agents
     ///
     /// Without an ID, finds all ready units (open, no unresolved deps) and spawns
     /// agents in parallel up to -j limit. With an ID, dispatches that specific unit.
@@ -836,7 +836,7 @@ Examples:
         review: bool,
     },
 
-    /// Decompose a unit into smaller children
+    /// Decompose an epic into smaller jobs
     ///
     /// Breaks a unit into smaller child units with proper dependencies.
     /// Each child should be completable by a fast, non-thinking model
