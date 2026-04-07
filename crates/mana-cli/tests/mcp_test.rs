@@ -494,10 +494,11 @@ fn mcp_status_overview() {
     let text = result["content"][0]["text"].as_str().unwrap();
     let parsed: Value = serde_json::from_str(text).unwrap();
 
-    // 0 claimed, 1 ready (unit 1), 1 goal (unit 3, no verify), 1 blocked (unit 2)
+    // 0 claimed, 1 ready (unit 1), 1 epic (unit 3), 1 blocked (unit 2)
     assert_eq!(parsed["claimed"].as_array().unwrap().len(), 0);
     assert_eq!(parsed["ready"].as_array().unwrap().len(), 1);
-    assert_eq!(parsed["goals"].as_array().unwrap().len(), 1);
+    assert_eq!(parsed["epics"].as_array().unwrap().len(), 1);
+    assert_eq!(parsed["goals"].as_array().unwrap().len(), 0);
     assert_eq!(parsed["blocked"].as_array().unwrap().len(), 1);
 }
 

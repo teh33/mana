@@ -50,10 +50,10 @@ Agents come and go. Mana keeps the work legible.
 
 ## The core model
 
-Mana is built from a few simple ideas:
+Mana tracks three main kinds of work records:
 
-### Unit
-A **unit** is one bounded piece of work.
+### Job
+A **job** is one executable piece of work.
 
 It has:
 - an ID
@@ -62,8 +62,25 @@ It has:
 - a verify command
 - optional description, acceptance criteria, paths, labels, and notes
 
+Jobs are what `mana run` dispatches to agents.
+
+### Epic
+An **epic** is a parent/grouping record for larger work.
+
+Epics help you:
+- decompose larger efforts into child jobs
+- track progress across a subtree
+- keep structure without dispatching an intermediate parent as if it were executable work
+
+An epic may still have rich description and acceptance context, but it is not the default target for agent execution. Break epics into child jobs.
+
+### Fact
+A **fact** is verified project knowledge.
+
+Facts are not implementation work. They capture durable knowledge with a verify command so agents can reuse what was learned.
+
 ### Verify gate
-Every unit has a **verify gate**: a shell command that must exit `0` before the unit can close.
+Every executable job has a **verify gate**: a shell command that must exit `0` before the job can close.
 
 This makes "done" machine-checkable.
 
@@ -117,13 +134,13 @@ Initialize a project:
 mana init --agent claude
 ```
 
-Create a unit:
+Create a job:
 
 ```bash
 mana create "Fix CSV export" --verify "cargo test csv"
 ```
 
-Create another:
+Create another job:
 
 ```bash
 mana create "Add pagination" --verify "cargo test page"
@@ -153,7 +170,7 @@ mana close 1
 
 ## How mana works
 
-Work lives in Markdown units inside `.mana/`:
+Work lives in Markdown records inside `.mana/`:
 
 ```text
 .mana/
@@ -163,7 +180,7 @@ Work lives in Markdown units inside `.mana/`:
 └── archive/2026/01/
 ```
 
-A unit looks like this:
+A job looks like this:
 
 ```yaml
 ---
@@ -179,7 +196,7 @@ Add a `--format csv` flag to the export command.
 **Files:** src/export.rs, tests/export_test.rs
 ```
 
-When you run `mana close 1`:
+When you run `mana close 1` on a job:
 
 1. Mana runs the verify command
 2. Exit `0` → the unit closes and archives
@@ -191,7 +208,7 @@ That simple loop is the foundation:
 
 ## Working with agents
 
-Configure an agent once, then dispatch units to it:
+Configure an agent once, then dispatch ready jobs to it:
 
 ```bash
 mana init --agent claude
@@ -240,7 +257,7 @@ mana status                 # See what's ready, blocked, or in flight
 
 ### Agent context
 
-`mana context <id>` produces a complete briefing for an agent:
+`mana context <id>` produces a complete briefing for an agent about a job or epic:
 
 1. unit spec
 2. previous attempts

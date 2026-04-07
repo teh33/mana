@@ -2,31 +2,33 @@
 name: mana
 description: >
   Coordination substrate for AI coding agents. Verified gates, dependency scheduling, multi-agent
-  dispatch. Create units to delegate work — `mana run` dispatches agents automatically.
+  dispatch. Create jobs to delegate work — `mana run` dispatches ready jobs automatically.
   Default action: `mana create "task" --verify "cmd"` (don't claim — let orchestration handle it).
 ---
 
 # Mana — Quick Reference
 
-Mana is a task tracker for AI agents where every task has a **verify gate** — a shell command that must exit 0 to close. `mana run` dispatches ready units to agents, tracks failures, and re-dispatches as dependencies resolve.
+Mana is a task tracker for AI agents where jobs, epics, and facts share the same durable substrate. Jobs have a **verify gate** — a shell command that must exit 0 to close. `mana run` dispatches ready jobs to agents, while epics organize larger efforts and facts capture verified project knowledge.
 
 **For syntax and examples:** `mana --help` or `mana <command> --help`
 
 ## When to Create
 
 - Bug found while working → `mana create "bug: ..." --verify "test"`
-- Multi-step feature → `mana create "feat: ..." --verify "test"`
+- Multi-step feature job → `mana create "feat: ..." --verify "test"`
 - Tests needed → `mana create "test: ..." --verify "test"`
-- Refactor/docs/chore → `mana create "refactor: ..." --verify "cmd" -p`
+- Refactor/docs/chore job → `mana create "refactor: ..." --verify "cmd" -p`
+- Bigger parent effort → create an **epic** to decompose into child jobs
+- Durable knowledge → create a **fact** with `mana fact`
 
 Use `--paths` to specify which files a unit touches (used by `mana context`):
 ```bash
 mana create "fix auth" --verify "cargo test auth" --paths "src/auth.rs,src/routes.rs"
 ```
 
-Don't claim — `mana run` dispatches agents. Use `-p` when verify already passes.
+Don't claim jobs manually by default — `mana run` dispatches ready work. Use `-p` when verify already passes.
 
-**Don't create** for questions, lookups, or trivial one-line fixes.
+**Don't create** jobs for questions, lookups, or trivial one-line fixes.
 
 ## Agent Context
 

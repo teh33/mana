@@ -1,6 +1,6 @@
 # Mana Best Practices for Agents
 
-A walkthrough guide for agents (and developers) on creating, executing, and managing units effectively.
+A walkthrough guide for agents (and developers) on creating, executing, and managing jobs, epics, and facts effectively.
 
 ---
 
@@ -19,11 +19,11 @@ A walkthrough guide for agents (and developers) on creating, executing, and mana
 
 ---
 
-## When to Create a Unit
+## When to Create a Job, Epic, or Fact
 
-Create a unit when the work needs **tracking, verification, or delegation**.
+Create a **job** when the work needs **tracking, verification, or delegation**.
 
-### Create a unit when:
+### Create a job when:
 
 - **Multi-step work** — The task spans 3+ steps or multiple files
 - **Verification matters** — You need a concrete command to prove it's done
@@ -33,7 +33,19 @@ Create a unit when the work needs **tracking, verification, or delegation**.
 - **Retry is likely** — The work might fail and need another attempt with accumulated context
 - **Decomposition helps** — Breaking into smaller sub-units clarifies the path forward
 
-### Don't create a unit for:
+### Create an epic when:
+
+- **The work is too large for one job** — You need a parent record before decomposition
+- **You need progress tracking across children** — Multiple jobs roll up into one larger effort
+- **You want structure before execution** — The parent should organize child jobs, not be dispatched directly
+
+### Create a fact when:
+
+- **You learned something durable** — A command can re-verify it later
+- **Future agents will need the knowledge** — API shape, environment constraint, migration state, etc.
+- **The value is memory, not implementation work** — Capture what is true, not what should be built
+
+### Don't create a job for:
 
 - **Trivial fixes** — One-line typo corrections, adding a comment
 - **Questions or lookups** — "What does this function do?" isn't a task
@@ -41,9 +53,9 @@ Create a unit when the work needs **tracking, verification, or delegation**.
 
 ---
 
-## Unit Anatomy
+## Job Anatomy
 
-Every unit has fields that serve specific purposes. Understand what goes where.
+Every job has fields that serve specific purposes. Understand what goes where.
 
 ```yaml
 # IDENTITY
@@ -124,11 +136,11 @@ assignee: alice@example.com                   # Human owner (optional)
 
 ---
 
-## Creating Effective Mana
+## Creating Effective Jobs
 
-### Size Your Mana Right
+### Size Your Jobs Right
 
-A single unit should be **completable by one agent in one attempt** without needing to ask clarifying questions.
+A single job should be **completable by one agent in one attempt** without needing to ask clarifying questions.
 
 #### Too Big (Break into children)
 
@@ -174,7 +186,7 @@ description: Explain what the signature validation does
 
 Too small for a unit — just do it directly.
 
-### Estimating Unit Size
+### Estimating Job Size
 
 Ask yourself:
 - **How many files will the agent modify?** → 2-5 ideally
@@ -199,7 +211,7 @@ P4 — Wishlist, can defer indefinitely
 
 ## Writing Descriptions That Agents Can Execute
 
-The description is **the agent prompt**. It lives in the unit file, so agents can read it without CLI dependencies.
+The description is **the agent prompt**. It lives in the job file, so agents can read it without CLI dependencies.
 
 ### Structure for Agent Success
 
@@ -369,7 +381,7 @@ verify: npm test -- --grep "refresh"
 
 ---
 
-## Splitting Work Into Subtasks
+## Splitting Work Into Child Jobs
 
 Strategic parents provide context. Leaf units are agent-executable units.
 
