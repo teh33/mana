@@ -1,6 +1,17 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Retry context for a unit being dispatched.
+#[derive(Debug, Clone)]
+pub struct RetryContext {
+    /// 0 for first attempt, >0 for retries.
+    pub attempt_number: u32,
+    /// Notes from the most recent failed/abandoned attempt, if any.
+    pub previous_failure: Option<String>,
+    /// Historical attempt notes in chronological order.
+    pub previous_notes: Vec<String>,
+}
+
 /// Configuration for the dispatch pool.
 ///
 /// Extracted from mana's Config — only the fields relevant to dispatch.
@@ -40,8 +51,8 @@ pub struct DispatchUnit {
     pub requires: Vec<String>,
     /// File paths this unit touches — used for conflict detection.
     pub paths: Vec<String>,
-    /// Per-unit model override from frontmatter.
-    pub model: Option<String>,
+    /// Retry context derived from the unit's attempt history.
+    pub retry: RetryContext,
 }
 
 /// Result of a single agent's execution.
@@ -125,4 +136,6 @@ pub struct SpawnConfig {
     pub run_model: Option<String>,
     pub file_locking: bool,
     pub batch_verify: bool,
+    /// Retry context derived from the unit's attempt history.
+    pub retry: RetryContext,
 }

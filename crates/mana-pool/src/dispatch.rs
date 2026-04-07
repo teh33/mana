@@ -57,6 +57,11 @@ pub fn run_dispatch(
         run_model: config.run_model.clone(),
         file_locking: config.file_locking,
         batch_verify: config.batch_verify,
+        retry: RetryContext {
+            attempt_number: 0,
+            previous_failure: None,
+            previous_notes: vec![],
+        },
     };
 
     loop {
@@ -125,7 +130,10 @@ pub fn run_dispatch(
 
             // Spawn agent on a worker thread
             let tx = result_tx.clone();
-            let cfg = spawn_config.clone();
+            let cfg = SpawnConfig {
+                retry: unit.retry.clone(),
+                ..spawn_config.clone()
+            };
             let unit_clone = unit.clone();
             let spawner_handle = Arc::clone(&spawner); // Arc<dyn Spawner> is Send
 
@@ -432,7 +440,11 @@ mod tests {
             produces: vec![],
             requires: vec![],
             paths: vec![],
-            model: None,
+            retry: RetryContext {
+                attempt_number: 0,
+                previous_failure: None,
+                previous_notes: vec![],
+            },
         }
     }
 
@@ -529,6 +541,135 @@ mod tests {
 
         assert_eq!(count.load(Ordering::SeqCst), 3);
         assert_eq!(outcome.results.len(), 3);
+    }
+
+    #[test]
+    fn spawner_receives_attempt_count() {
+        struct AssertRetry;
+        impl Spawner for AssertRetry {
+            fn spawn(&self, unit: &DispatchUnit, config: &SpawnConfig) -> AgentResult {
+                assert_eq!(unit.retry.attempt_number, 2);
+                assert_eq!(config.retry.attempt_number, 2);
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let mut retrying = unit("1", &[]);
+        retrying.retry = RetryContext {
+            attempt_number: 2,
+            previous_failure: Some("verify failed".to_string()),
+            previous_notes: vec!["try smaller patch".to_string()],
+        };
+        let (event_tx, _event_rx) = mpsc::channel();
+        let outcome = run_dispatch(
+            &pool_config(),
+            &[retrying],
+            &HashSet::new(),
+            Arc::new(AssertRetry),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+        assert_eq!(outcome.results.len(), 1);
+    }
+
+    #[test]
+    fn spawner_receives_previous_failure_and_notes() {
+        struct AssertFailure;
+        impl Spawner for AssertFailure {
+            fn spawn(&self, unit: &DispatchUnit, config: &SpawnConfig) -> AgentResult {
+                assert_eq!(
+                    unit.retry.previous_failure.as_deref(),
+                    Some("tests failed in auth flow")
+                );
+                assert_eq!(
+                    config.retry.previous_failure.as_deref(),
+                    Some("tests failed in auth flow")
+                );
+                assert_eq!(
+                    unit.retry.previous_notes,
+                    vec!["first note".to_string(), "second note".to_string()]
+                );
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let mut retrying = unit("1", &[]);
+        retrying.retry = RetryContext {
+            attempt_number: 1,
+            previous_failure: Some("tests failed in auth flow".to_string()),
+            previous_notes: vec!["first note".to_string(), "second note".to_string()],
+        };
+        let (event_tx, _event_rx) = mpsc::channel();
+        let outcome = run_dispatch(
+            &pool_config(),
+            &[retrying],
+            &HashSet::new(),
+            Arc::new(AssertFailure),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+        assert_eq!(outcome.results.len(), 1);
+    }
+
+    #[test]
+    fn first_attempt_has_zero_attempts() {
+        struct AssertFirst;
+        impl Spawner for AssertFirst {
+            fn spawn(&self, unit: &DispatchUnit, config: &SpawnConfig) -> AgentResult {
+                assert_eq!(unit.retry.attempt_number, 0);
+                assert_eq!(config.retry.attempt_number, 0);
+                assert!(unit.retry.previous_failure.is_none());
+                assert!(unit.retry.previous_notes.is_empty());
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let (event_tx, _event_rx) = mpsc::channel();
+        let outcome = run_dispatch(
+            &pool_config(),
+            &[unit("1", &[])],
+            &HashSet::new(),
+            Arc::new(AssertFirst),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+        assert_eq!(outcome.results.len(), 1);
     }
 
     #[test]
