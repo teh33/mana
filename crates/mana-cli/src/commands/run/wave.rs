@@ -495,7 +495,7 @@ fn run_wave_template(
     Ok(results)
 }
 
-/// Direct mode: spawn pi directly with JSON output and monitoring.
+/// Direct mode: spawn the direct-mode agent with JSON output and monitoring.
 #[allow(clippy::too_many_arguments)]
 fn run_wave_direct(
     mana_dir: &Path,

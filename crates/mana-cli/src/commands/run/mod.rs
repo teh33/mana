@@ -12,8 +12,8 @@
 //!
 //! Spawning modes:
 //! - **Template mode** (backward compat): If `config.run` is set, spawn via `sh -c <template>`.
-//! - **Direct mode**: If no template is configured but `pi` is on PATH, spawn pi directly
-//!   with `--mode json --print --no-session`, monitoring with timeouts and parsing events.
+//! - **Direct mode**: If no template is configured but `imp` is on PATH, spawn `imp run <id>`
+//!   and monitor its JSON event stream with timeouts.
 
 pub(super) mod memory;
 mod plan;
@@ -348,7 +348,7 @@ enum SpawnMode {
         run_template: String,
         plan_template: Option<String>,
     },
-    /// Spawn pi directly with JSON output and monitoring.
+    /// Spawn the direct-mode agent with JSON output and monitoring.
     Direct,
 }
 
@@ -461,17 +461,16 @@ pub fn cmd_run(mana_dir: &Path, args: RunArgs) -> Result<()> {
     let config = Config::load_with_extends(mana_dir)?;
     let spawn_mode = determine_spawn_mode(&config);
 
-    if spawn_mode == SpawnMode::Direct && !imp_available() && !pi_available() {
+    if spawn_mode == SpawnMode::Direct && !imp_available() {
         anyhow::bail!(
-            "No agent configured and neither `imp` nor `pi` found on PATH.\n\n\
+            "No direct agent configured and `imp` was not found on PATH.\n\n\
              Either:\n  \
                1. Install imp (Rust): cargo install imp-cli\n  \
-               2. Install pi (Node): npm i -g @mariozechner/pi-coding-agent\n  \
-               3. Set a run template: mana config set run \"<command>\"\n\n\
+               2. Set a run template: mana config set run \"<command>\"\n\n\
              The command template uses {{id}} as a placeholder for the unit ID.\n\n\
              Examples:\n  \
                mana config set run \"imp run {{id}} && mana close {{id}}\"\n  \
-               mana config set run \"pi @.mana/{{id}}-*.md 'implement and mana close {{id}}'\""
+               mana config set run \"claude -p 'implement unit {{id}} and run mana close {{id}}'\""
         );
     }
 
@@ -516,13 +515,12 @@ pub fn run_native(mana_dir: &Path, params: NativeRunParams) -> Result<RunView> {
     let config = Config::load_with_extends(mana_dir)?;
     let spawn_mode = determine_spawn_mode(&config);
 
-    if spawn_mode == SpawnMode::Direct && !imp_available() && !pi_available() {
+    if spawn_mode == SpawnMode::Direct && !imp_available() {
         anyhow::bail!(
-            "No agent configured and neither `imp` nor `pi` found on PATH.\n\n\
+            "No direct agent configured and `imp` was not found on PATH.\n\n\
              Either:\n  \
                1. Install imp (Rust): cargo install imp-cli\n  \
-               2. Install pi (Node): npm i -g @mariozechner/pi-coding-agent\n  \
-               3. Set a run template: mana config set run \"<command>\""
+               2. Set a run template: mana config set run \"<command>\""
         );
     }
 
@@ -562,16 +560,6 @@ fn imp_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Check if `pi` is available on PATH.
-fn pi_available() -> bool {
-    Command::new("pi")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
 
 /// Single dispatch pass: plan → print/execute → report.
 fn run_once(
@@ -610,7 +598,6 @@ fn run_once(
             print_plan(&plan, config.run_model.as_deref());
             if let Some(agent) = ready_queue::detect_direct_agent().map(|agent| match agent {
                 ready_queue::DirectAgent::Imp => "imp",
-                ready_queue::DirectAgent::Pi => "pi",
             }) {
                 eprintln!(
                     "Runtime: direct agent={} model={}",
@@ -1129,13 +1116,12 @@ pub fn run_with_stream_capture_and_sink(
     let config = Config::load_with_extends(mana_dir)?;
     let spawn_mode = determine_spawn_mode(&config);
 
-    if spawn_mode == SpawnMode::Direct && !imp_available() && !pi_available() {
+    if spawn_mode == SpawnMode::Direct && !imp_available() {
         anyhow::bail!(
-            "No agent configured and neither `imp` nor `pi` found on PATH.\n\n\
+            "No direct agent configured and `imp` was not found on PATH.\n\n\
              Either:\n  \
                1. Install imp (Rust): cargo install imp-cli\n  \
-               2. Install pi (Node): npm i -g @mariozechner/pi-coding-agent\n  \
-               3. Set a run template: mana config set run \"<command>\""
+               2. Set a run template: mana config set run \"<command>\""
         );
     }
 
@@ -1161,7 +1147,6 @@ fn detect_effective_runtime(config: &Config, spawn_mode: &SpawnMode) -> RunRunti
     let direct_agent = match spawn_mode {
         SpawnMode::Direct => ready_queue::detect_direct_agent().map(|agent| match agent {
             ready_queue::DirectAgent::Imp => "imp".to_string(),
-            ready_queue::DirectAgent::Pi => "pi".to_string(),
         }),
         SpawnMode::Template { run_template, .. } => Some(if run_template.contains("imp") {
             "imp".to_string()
@@ -1379,17 +1364,15 @@ mod tests {
     }
 
     #[test]
-    fn cmd_run_errors_when_no_run_template_and_no_pi() {
+    fn cmd_run_errors_when_no_run_template_and_no_imp() {
         let (_dir, mana_dir) = make_mana_dir();
         write_config(&mana_dir, None);
 
         let args = default_args();
 
         let result = cmd_run(&mana_dir, args);
-        // With no template and no pi on PATH, should error
-        // (The exact error depends on whether pi is installed)
-        // In CI/test without pi, it should bail
-        if !pi_available() && !imp_available() {
+        // With no template and no imp on PATH, should error
+        if !imp_available() {
             assert!(result.is_err());
             let err = result.unwrap_err().to_string();
             assert!(

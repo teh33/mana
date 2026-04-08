@@ -273,11 +273,10 @@ pub(super) fn run_ready_queue_direct(
             running_unit_paths.insert(sb.id.clone(), sb.paths.clone());
 
             let round = wave_map.get(&sb.id).copied().unwrap_or(1);
-            let agent = detect_direct_agent().unwrap_or(DirectAgent::Pi);
+            let agent = detect_direct_agent().expect("direct mode requires imp to be available");
             let effective_model = sb.model.as_deref().or(cfg.run_model.as_deref());
             let agent_label = match agent {
                 DirectAgent::Imp => "imp",
-                DirectAgent::Pi => "pi",
             };
             let model_label = effective_model.unwrap_or("default");
 
@@ -448,15 +447,12 @@ pub(super) fn run_ready_queue_direct(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum DirectAgent {
     Imp,
-    Pi,
 }
 
-/// Detect which agent binary is available, preferring imp.
+/// Detect which direct-mode agent binary is available.
 pub(super) fn detect_direct_agent() -> Option<DirectAgent> {
     if super::imp_available() {
         Some(DirectAgent::Imp)
-    } else if super::pi_available() {
-        Some(DirectAgent::Pi)
     } else {
         None
     }
@@ -470,10 +466,6 @@ fn build_direct_command(
 ) -> Command {
     match agent {
         DirectAgent::Imp => build_imp_command(prompt_result, model, unit_id),
-        DirectAgent::Pi => {
-            let _ = unit_id; // pi doesn't use unit_id
-            build_pi_command(prompt_result, model)
-        }
     }
 }
 
@@ -495,26 +487,8 @@ fn build_imp_command(
     cmd
 }
 
-fn build_pi_command(prompt_result: &crate::prompt::PromptResult, model: Option<&str>) -> Command {
-    let mut cmd = Command::new("pi");
-    cmd.args(["--mode", "json", "--print", "--no-session"]);
 
-    if let Some(model) = model {
-        cmd.args(["--model", model]);
-    }
-
-    if !prompt_result.system_prompt.is_empty() {
-        cmd.args(["--append-system-prompt", &prompt_result.system_prompt]);
-    }
-
-    if !prompt_result.file_ref.is_empty() {
-        cmd.arg(&prompt_result.file_ref);
-    }
-    cmd.arg(&prompt_result.user_message);
-    cmd
-}
-
-/// Run a single unit by spawning an agent (imp or pi) directly.
+/// Run a single unit by spawning the direct-mode agent.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run_single_direct(
     mana_dir: &Path,
@@ -620,8 +594,8 @@ pub(super) fn run_single_direct(
 
     let effective_model = unit.model.as_deref().or(config_run_model);
 
-    // Detect which agent to use (imp preferred over pi)
-    let agent = detect_direct_agent().unwrap_or(DirectAgent::Pi);
+    // Detect the direct-mode agent to use.
+    let agent = detect_direct_agent().expect("direct mode requires imp to be available");
     let mut cmd = build_direct_command(agent, &prompt_result, effective_model, &sb.id);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -644,10 +618,10 @@ pub(super) fn run_single_direct(
                 duration: started.elapsed(),
                 total_tokens: None,
                 total_cost: None,
-                error: Some(format!("Failed to spawn pi: {}", e)),
+                error: Some(format!("Failed to spawn imp: {}", e)),
                 tool_count: 0,
                 turns: 0,
-                failure_summary: Some(format!("Failed to spawn pi: {}", e)),
+                failure_summary: Some(format!("Failed to spawn imp: {}", e)),
             };
         }
     };
@@ -696,7 +670,7 @@ pub(super) fn run_single_direct(
 
     // Monitor the process, parsing JSON events
     let monitor_result = timeout::monitor_process(&mut child, stdout, &timeout_config, |line| {
-        // Try to parse each line as a JSON event from pi
+        // Try to parse each line as a JSON event from the direct-mode agent
         if let Ok(raw) = serde_json::from_str::<serde_json::Value>(line) {
             if let Some(event) = pi_output::parse_agent_event(&raw) {
                 match event {
@@ -930,43 +904,6 @@ mod tests {
         .unwrap();
     }
 
-    #[test]
-    fn direct_pi_command_includes_model_flag() {
-        let prompt_result = crate::prompt::PromptResult {
-            system_prompt: "system".to_string(),
-            user_message: "implement it".to_string(),
-            file_ref: "@.mana/1-task.md".to_string(),
-        };
-
-        let cmd = build_pi_command(&prompt_result, Some("sonnet"));
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-
-        assert!(args
-            .windows(2)
-            .any(|window| window == ["--model", "sonnet"]));
-        assert!(args.contains(&"@.mana/1-task.md".to_string()));
-        assert!(args.contains(&"implement it".to_string()));
-    }
-
-    #[test]
-    fn direct_pi_command_omits_model_flag_when_unset() {
-        let prompt_result = crate::prompt::PromptResult {
-            system_prompt: String::new(),
-            user_message: "implement it".to_string(),
-            file_ref: String::new(),
-        };
-
-        let cmd = build_pi_command(&prompt_result, None);
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-
-        assert!(!args.iter().any(|arg| arg == "--model"));
-    }
 
     fn make_sized_unit(
         id: &str,
