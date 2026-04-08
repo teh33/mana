@@ -1,5 +1,5 @@
-# Moved to root
+# Moved
 
-The umbrella migration spec now lives at `../UMBRELLA.md` in the tower root.
+The umbrella migration spec is archived at `../future/UMBRELLA.md`.
 
-This file remains only as a pointer to reduce confusion during the copy-first migration.
+It remains as historical reference for the four-project tower migration.

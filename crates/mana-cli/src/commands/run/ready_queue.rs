@@ -463,9 +463,10 @@ fn build_direct_command(
     prompt_result: &crate::prompt::PromptResult,
     model: Option<&str>,
     unit_id: &str,
+    mana_dir: &Path,
 ) -> Command {
     match agent {
-        DirectAgent::Imp => build_imp_command(prompt_result, model, unit_id),
+        DirectAgent::Imp => build_imp_command(prompt_result, model, unit_id, mana_dir),
     }
 }
 
@@ -473,6 +474,7 @@ fn build_imp_command(
     _prompt_result: &crate::prompt::PromptResult,
     model: Option<&str>,
     unit_id: &str,
+    mana_dir: &Path,
 ) -> Command {
     let mut cmd = Command::new("imp");
 
@@ -480,10 +482,12 @@ fn build_imp_command(
         cmd.args(["--model", model]);
     }
 
-    // imp's headless mode: `imp run <unit-id>`
-    // It reads the unit file directly, assembles its own system prompt,
-    // and outputs JSON events to stdout.
-    cmd.args(["run", unit_id]);
+    // imp's headless worker mode: `imp --mode json run <unit-id> --mana-dir <path> [--defer-verify]`
+    // It loads the unit via canonical mana-core APIs (mana_worker::load_assignment),
+    // assembles its own system prompt and context prefill, and outputs JSON events.
+    cmd.args(["--mode", "json", "run", unit_id, "--mana-dir"]);
+    cmd.arg(mana_dir);
+    cmd.arg("--defer-verify");
     cmd
 }
 
@@ -596,7 +600,7 @@ pub(super) fn run_single_direct(
 
     // Detect the direct-mode agent to use.
     let agent = detect_direct_agent().expect("direct mode requires imp to be available");
-    let mut cmd = build_direct_command(agent, &prompt_result, effective_model, &sb.id);
+    let mut cmd = build_direct_command(agent, &prompt_result, effective_model, &sb.id, mana_dir);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
@@ -903,7 +907,47 @@ mod tests {
         )
         .unwrap();
     }
+    #[test]
+    fn direct_imp_command_includes_worker_contract_flags() {
+        let prompt_result = crate::prompt::PromptResult {
+            system_prompt: "system".to_string(),
+            user_message: "implement it".to_string(),
+            file_ref: "@.mana/1-task.md".to_string(),
+        };
+        let mana_dir = Path::new("/tmp/project/.mana");
 
+        let cmd = build_imp_command(&prompt_result, Some("gpt-5.4"), "1.2", mana_dir);
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        assert!(args.windows(2).any(|w| w == ["--model", "gpt-5.4"]));
+        assert!(args.windows(2).any(|w| w == ["--mode", "json"]));
+        assert!(args.windows(2).any(|w| w == ["run", "1.2"]));
+        assert!(args.windows(2).any(|w| w == ["--mana-dir", "/tmp/project/.mana"]));
+        assert!(args.iter().any(|arg| arg == "--defer-verify"));
+    }
+
+    #[test]
+    fn direct_imp_command_omits_model_when_unset() {
+        let prompt_result = crate::prompt::PromptResult {
+            system_prompt: String::new(),
+            user_message: "implement it".to_string(),
+            file_ref: String::new(),
+        };
+        let mana_dir = Path::new("/tmp/project/.mana");
+
+        let cmd = build_imp_command(&prompt_result, None, "7", mana_dir);
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        assert!(!args.iter().any(|arg| arg == "--model"));
+        assert!(args.windows(2).any(|w| w == ["run", "7"]));
+        assert!(args.windows(2).any(|w| w == ["--mana-dir", "/tmp/project/.mana"]));
+    }
 
     fn make_sized_unit(
         id: &str,
