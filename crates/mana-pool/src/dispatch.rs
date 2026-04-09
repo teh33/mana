@@ -103,6 +103,79 @@ fn emit_stuck_events(
     }
 }
 
+fn execute_verify_groups(
+    config: &PoolConfig,
+    units: &[DispatchUnit],
+    results: &mut [AgentResult],
+    event_tx: &mpsc::Sender<PoolEvent>,
+) -> Result<bool> {
+    if !config.batch_verify {
+        return Ok(false);
+    }
+
+    let successful_units: Vec<DispatchUnit> = units
+        .iter()
+        .filter(|unit| results.iter().any(|result| result.unit_id == unit.id && result.success))
+        .cloned()
+        .collect();
+    let groups = group_verify_commands(&successful_units);
+    if groups.is_empty() {
+        return Ok(false);
+    }
+
+    let project_root = config
+        .mana_dir
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Cannot determine project root from mana dir"))?;
+
+    let verify_results = run_verify_groups(&groups, event_tx, |group| {
+        mana_core::ops::verify::run_verify_command(&group.command, project_root, None)
+            .map(|result| result.passed)
+            .unwrap_or(false)
+    });
+
+    let mut any_failed = false;
+    for result in results.iter_mut() {
+        if verify_results.get(&result.unit_id) == Some(&false) {
+            result.success = false;
+            result.error.get_or_insert_with(|| "verify failed".to_string());
+            result
+                .failure_summary
+                .get_or_insert_with(|| "verify failed".to_string());
+            any_failed = true;
+        }
+    }
+
+    Ok(any_failed)
+}
+
+fn finish_dispatch(
+    config: &PoolConfig,
+    units: &[DispatchUnit],
+    mut results: Vec<AgentResult>,
+    mut any_failed: bool,
+    event_tx: &mpsc::Sender<PoolEvent>,
+    started: Instant,
+) -> Result<DispatchOutcome> {
+    if execute_verify_groups(config, units, &mut results, event_tx)? {
+        any_failed = true;
+    }
+
+    let total = results.len();
+    let passed = results.iter().filter(|r| r.success).count();
+    let _ = event_tx.send(PoolEvent::Finished {
+        total,
+        passed,
+        failed: total - passed,
+        duration: started.elapsed(),
+    });
+
+    Ok(DispatchOutcome {
+        results,
+        any_failed,
+    })
+}
+
 /// Run a full dispatch cycle: schedule units respecting dependencies, concurrency,
 /// and memory limits. Spawns agents via the provided `Spawner` implementation.
 ///
@@ -307,32 +380,14 @@ fn run_dispatch_with_options(
                             results.push(r);
                         }
                     }
-                    // Run deduplicated verify groups after agents complete when batch verify is enabled.
-    if config.batch_verify {
-        let successful_units: Vec<DispatchUnit> = units
-            .iter()
-            .filter(|unit| results.iter().any(|r| r.unit_id == unit.id && r.success))
-            .cloned()
-            .collect();
-        let groups = group_verify_commands(&successful_units);
-        let verify_results = run_verify_groups(&groups, event_tx, |_group| true);
-        if verify_results.values().any(|success| !success) {
-            any_failed = true;
-        }
-    }
-
-    let total = results.len();
-                    let passed = results.iter().filter(|r| r.success).count();
-                    let _ = event_tx.send(PoolEvent::Finished {
-                        total,
-                        passed,
-                        failed: total - passed,
-                        duration: started.elapsed(),
-                    });
-                    return Ok(DispatchOutcome {
+                    return finish_dispatch(
+                        config,
+                        units,
                         results,
-                        any_failed: true,
-                    });
+                        true,
+                        event_tx,
+                        started,
+                    );
                 }
                 drain_progress_events(
                     &progress_rx,
@@ -350,10 +405,14 @@ fn run_dispatch_with_options(
                     Ok(result) => break result,
                     Err(mpsc::RecvTimeoutError::Timeout) => continue,
                     Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        return Ok(DispatchOutcome {
+                        return finish_dispatch(
+                            config,
+                            units,
                             results,
                             any_failed,
-                        });
+                            event_tx,
+                            started,
+                        );
                     }
                 }
             };
@@ -397,18 +456,14 @@ fn run_dispatch_with_options(
                             results.push(r);
                         }
                     }
-                    let total = results.len();
-                    let passed = results.iter().filter(|r| r.success).count();
-                    let _ = event_tx.send(PoolEvent::Finished {
-                        total,
-                        passed,
-                        failed: total - passed,
-                        duration: started.elapsed(),
-                    });
-                    return Ok(DispatchOutcome {
+                    return finish_dispatch(
+                        config,
+                        units,
                         results,
-                        any_failed: true,
-                    });
+                        true,
+                        event_tx,
+                        started,
+                    );
                 }
             }
 
@@ -437,19 +492,14 @@ fn run_dispatch_with_options(
         results.push(result);
     }
 
-    let total = results.len();
-    let passed = results.iter().filter(|r| r.success).count();
-    let _ = event_tx.send(PoolEvent::Finished {
-        total,
-        passed,
-        failed: total - passed,
-        duration: started.elapsed(),
-    });
-
-    Ok(DispatchOutcome {
+    return finish_dispatch(
+        config,
+        units,
         results,
         any_failed,
-    })
+        event_tx,
+        started,
+    );
 }
 
 /// Check if a unit's dependencies are satisfied.
@@ -628,6 +678,7 @@ mod tests {
             produces: vec![],
             requires: vec![],
             paths: vec![],
+            verify_command: None,
             retry: RetryContext {
                 attempt_number: 0,
                 previous_failure: None,
@@ -651,25 +702,219 @@ mod tests {
     }
 
     #[test]
-    fn dispatches_independent_units() {
-        let units = vec![unit("1", &[]), unit("2", &[]), unit("3", &[])];
-        let (spawner, count) = MockSpawner::new();
-        let (event_tx, _event_rx) = mpsc::channel();
-        let completed = HashSet::new();
+    fn dedup_verify_groups_identical_commands() {
+        let units = vec![
+            DispatchUnit {
+                verify_command: Some("cargo build".to_string()),
+                ..unit("1", &[])
+            },
+            DispatchUnit {
+                verify_command: Some("cargo build".to_string()),
+                ..unit("2", &[])
+            },
+            DispatchUnit {
+                verify_command: Some("cargo test".to_string()),
+                ..unit("3", &[])
+            },
+        ];
+
+        let groups = group_verify_commands(&units);
+
+        assert_eq!(
+            groups,
+            vec![
+                VerifyGroup {
+                    command: "cargo build".to_string(),
+                    unit_ids: vec!["1".to_string(), "2".to_string()],
+                },
+                VerifyGroup {
+                    command: "cargo test".to_string(),
+                    unit_ids: vec!["3".to_string()],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn dedup_verify_runs_once_per_group() {
+        let groups = vec![
+            VerifyGroup {
+                command: "cargo build".to_string(),
+                unit_ids: vec!["1".to_string(), "2".to_string()],
+            },
+            VerifyGroup {
+                command: "cargo test".to_string(),
+                unit_ids: vec!["3".to_string()],
+            },
+        ];
+        let (event_tx, event_rx) = mpsc::channel();
+        let run_count = Arc::new(AtomicUsize::new(0));
+        let run_count_for_closure = run_count.clone();
+
+        let results = run_verify_groups(&groups, &event_tx, |_group| {
+            run_count_for_closure.fetch_add(1, Ordering::SeqCst);
+            true
+        });
+
+        assert_eq!(run_count.load(Ordering::SeqCst), 2);
+        assert_eq!(results.get("1"), Some(&true));
+        assert_eq!(results.get("2"), Some(&true));
+        assert_eq!(results.get("3"), Some(&true));
+
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        let verify_events: Vec<(String, Vec<String>, bool)> = events
+            .into_iter()
+            .filter_map(|event| match event {
+                PoolEvent::VerifyGroupRun {
+                    command,
+                    unit_ids,
+                    success,
+                } => Some((command, unit_ids, success)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(verify_events.len(), 2);
+        assert_eq!(verify_events[0].0, "cargo build");
+        assert_eq!(verify_events[0].1, vec!["1".to_string(), "2".to_string()]);
+        assert!(verify_events[0].2);
+        assert_eq!(verify_events[1].0, "cargo test");
+        assert_eq!(verify_events[1].1, vec!["3".to_string()]);
+        assert!(verify_events[1].2);
+    }
+
+    #[test]
+    fn dedup_verify_attributes_failure_to_all() {
+        let groups = vec![VerifyGroup {
+            command: "cargo build".to_string(),
+            unit_ids: vec!["1".to_string(), "2".to_string()],
+        }];
+        let (event_tx, event_rx) = mpsc::channel();
+
+        let results = run_verify_groups(&groups, &event_tx, |_group| false);
+
+        assert_eq!(results.get("1"), Some(&false));
+        assert_eq!(results.get("2"), Some(&false));
+
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            PoolEvent::VerifyGroupRun { command, unit_ids, success }
+                if command == "cargo build"
+                && unit_ids == &vec!["1".to_string(), "2".to_string()]
+                && !success
+        )));
+    }
+
+
+    #[test]
+    fn dedup_verify_run_dispatch_marks_shared_failures() {
+        struct SuccessSpawner;
+        impl Spawner for SuccessSpawner {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let mut config = pool_config();
+        config.batch_verify = true;
+        config.mana_dir = std::path::PathBuf::from("/tmp");
+
+        let units = vec![
+            DispatchUnit {
+                verify_command: Some("exit 1".to_string()),
+                ..unit("1", &[])
+            },
+            DispatchUnit {
+                verify_command: Some("exit 1".to_string()),
+                ..unit("2", &[])
+            },
+            DispatchUnit {
+                verify_command: Some("true".to_string()),
+                ..unit("3", &[])
+            },
+        ];
+        let (event_tx, event_rx) = mpsc::channel();
 
         let outcome = run_dispatch(
-            &pool_config(),
+            &config,
             &units,
-            &completed,
-            Arc::new(spawner),
+            &HashSet::new(),
+            Arc::new(SuccessSpawner),
             &event_tx,
             &|| false,
         )
         .unwrap();
 
-        assert_eq!(count.load(Ordering::SeqCst), 3);
-        assert_eq!(outcome.results.len(), 3);
-        assert!(!outcome.any_failed);
+        assert!(outcome.any_failed);
+        assert_eq!(
+            outcome
+                .results
+                .iter()
+                .filter(|result| !result.success)
+                .map(|result| result.unit_id.clone())
+                .collect::<Vec<_>>(),
+            vec!["1".to_string(), "2".to_string()]
+        );
+        assert!(outcome
+            .results
+            .iter()
+            .find(|result| result.unit_id == "1")
+            .unwrap()
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("verify failed"));
+        assert!(outcome
+            .results
+            .iter()
+            .find(|result| result.unit_id == "2")
+            .unwrap()
+            .failure_summary
+            .as_deref()
+            .unwrap()
+            .contains("verify failed"));
+        assert!(outcome
+            .results
+            .iter()
+            .find(|result| result.unit_id == "3")
+            .unwrap()
+            .success);
+
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        let verify_events: Vec<(String, Vec<String>, bool)> = events
+            .into_iter()
+            .filter_map(|event| match event {
+                PoolEvent::VerifyGroupRun {
+                    command,
+                    unit_ids,
+                    success,
+                } => Some((command, unit_ids, success)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(verify_events.len(), 2);
+        assert!(verify_events.iter().any(|(command, unit_ids, success)| {
+            command == "exit 1" && unit_ids == &vec!["1".to_string(), "2".to_string()] && !success
+        }));
+        assert!(verify_events.iter().any(|(command, unit_ids, success)| {
+            command == "true" && unit_ids == &vec!["3".to_string()] && *success
+        }));
     }
 
     #[test]
