@@ -201,10 +201,10 @@ main.rs ──▶ cli.rs (parse) ──▶ commands/*.rs (execute)
 GitHub Actions workflows are configured.
 
 From the files inspected in this repo:
-- Tower root: `.github/workflows/ci.yml` runs `cargo check --workspace`, targeted `cargo test -p ...` for the active mana/imp crates, `cargo clippy --workspace -- -D warnings`, and `cargo fmt --check`.
+- Tower root: `.github/workflows/ci.yml` runs `cargo check --workspace`, targeted `cargo test -p ...` for the active mana/imp crates, `cargo clippy --workspace -- -D warnings`, `cargo fmt --check`, and a root `cargo audit` dependency security check.
 - mana-local: `mana/.github/workflows/ci.yml` runs `cargo check`, `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check`, and an MSRV `cargo check` on Rust 1.85.
 
-The inspected workflows do **not** yet include dedicated dependency or security audit jobs (for example `cargo-audit`, OSV scanning, or secrets scanning).
+The inspected workflows still do **not** include broader security coverage such as OSV/SAST scanning or secrets scanning, and the mana-local workflow does not currently mirror the root `cargo audit` step.
 
 ## Conventions & Patterns
 
@@ -252,10 +252,9 @@ This is expected — adding a command requires cli.rs (args) + mod.rs (module) +
 - **Zero-test files:** `status.rs`, `verify.rs`, `interactive.rs`, `locks.rs` (command-level)
 
 ### Notable Gaps
-- **CI exists, but coverage is still limited** — the inspected root and mana-local GitHub Actions workflows cover build/test/lint/format (and mana-local MSRV), but they do not yet include dedicated dependency or security audit jobs.
+- **CI exists, but security coverage is still partial** — the inspected root and mana-local GitHub Actions workflows cover build/test/lint/format (and mana-local MSRV). The root workflow also runs `cargo audit`, but the inspected workflows do not yet include broader OSV/SAST or secrets-scanning coverage, and the mana-local workflow does not currently mirror the root audit step.
 - **serde_yml is pre-1.0** — currently pinned to 0.0.12. Monitor for security advisories and consider migrating to a stable, maintained YAML crate when available.
-- **No dependency/security audit step in the inspected CI workflows** — no `cargo-audit`, OSV, or secrets-scanning job was present in the workflows inspected for this update.
-- **Public API coverage is broad but still uneven for embedding** — `mana-core::api` already exposes discovery, core queries, graph helpers, unit mutations, claim/release, dependency edits, ready-queue computation, context assembly, verify helpers, and fact operations. The remaining gaps are narrower: some operations still live only in lower-level `ops::*` modules rather than stable top-level `api::*` wrappers (for example `init`, `sync`, `adopt`, `unarchive`, `dep_list`, `batch_verify`, `config_get`/`config_set`, and move operations), and full agent-spawn orchestration is not exposed here as a single stable library entry point.
+- **Public API coverage is broad but still uneven for embedding** — `mana-core::api` already exposes discovery, core queries, graph helpers, unit mutations, claim/release, dependency edits, ready-queue computation, context assembly, verify helpers, and fact operations. The remaining gaps are narrower: several operations still live only in lower-level `ops::*` modules rather than stable top-level `api::*` wrappers (for example `init`, `sync`, `adopt`, `unarchive`, `dep_list`, `batch_verify`, `config_get`/`config_set`, move operations, and `compute_run_plan`), and dispatch execution/worker orchestration currently lives outside `mana-core::api` in crate-level/CLI surfaces rather than as one stable embedding entry point.
 - **MCP tools duplicate CLI logic** — close, claim, auto-close-parent are reimplemented in `mcp/tools.rs` rather than sharing with `commands/close.rs`, causing behavioral divergence
 
 ### In-Progress Work (from .mana/)
