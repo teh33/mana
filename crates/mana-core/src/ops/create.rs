@@ -158,6 +158,7 @@ pub fn create(mana_dir: &Path, params: CreateParams) -> Result<CreateResult> {
 
     let unit_path = mana_dir.join(format!("{}-{}.md", unit_id, slug));
     unit.to_file(&unit_path)?;
+    config.save(mana_dir)?;
     let mut locked = LockedIndex::acquire(mana_dir)?;
     locked.index = Index::build(mana_dir)?;
     locked.save_and_release()?;
@@ -345,6 +346,14 @@ pub mod tests {
         let mut p = minimal_params("Child");
         p.parent = Some("1".into());
         assert_eq!(create(&bd, p).unwrap().unit.id, "1.1");
+    }
+
+    #[test]
+    fn create_rebuilds_index() {
+        let (_dir, bd) = setup_mana_dir();
+        create(&bd, minimal_params("Indexed")).unwrap();
+        let index = Index::load(&bd).unwrap();
+        assert_eq!(index.units[0].title, "Indexed");
     }
 
     #[test]
