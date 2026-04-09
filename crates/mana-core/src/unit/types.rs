@@ -93,8 +93,9 @@ pub enum VerifyPosture {
 #[serde(rename_all = "snake_case")]
 pub enum VisibilityState {
     Unknown,
-    Sufficient,
+    Satisfied,
     Missing,
+    NotApplicable,
 }
 
 /// Normalized retry / attempt pressure relevant to autonomy gating.
@@ -124,10 +125,9 @@ pub enum RiskBand {
 #[serde(rename_all = "snake_case")]
 pub enum AutonomyProvenance {
     Unknown,
-    Derived,
-    Observed,
-    Human,
-    Imported,
+    AttemptObservation,
+    CloseEvidence,
+    Mixed,
 }
 
 /// Current scheduler-facing autonomy answer persisted on a unit.
@@ -152,7 +152,11 @@ pub struct AutonomyObservation {
     pub visibility: VisibilityState,
     pub provenance: AutonomyProvenance,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
+    pub source_attempt: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub continuation_budget_delta: Option<i32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -652,10 +656,10 @@ mod tests {
             ],
             review: ReviewState::Pending,
             verify: VerifyPosture::Deferred,
-            visibility: VisibilityState::Sufficient,
+            visibility: VisibilityState::Satisfied,
             attempt_pressure: AttemptPressure::NearLimit,
             risk: RiskBand::High,
-            provenance: AutonomyProvenance::Derived,
+            provenance: AutonomyProvenance::Mixed,
             continuation_budget: Some(1),
         };
 
@@ -756,9 +760,11 @@ mod tests {
             cost: Some(0.03),
             output_snippet: Some("FAILED: assertion error".to_string()),
             autonomy_observation: Some(AutonomyObservation {
-                visibility: VisibilityState::Sufficient,
-                provenance: AutonomyProvenance::Observed,
-                summary: Some("verify run captured enough visibility".to_string()),
+                visibility: VisibilityState::Satisfied,
+                provenance: AutonomyProvenance::CloseEvidence,
+                source_attempt: Some(3),
+                observed_at: Some(now),
+                continuation_budget_delta: Some(1),
             }),
         };
 

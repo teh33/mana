@@ -244,6 +244,11 @@ pub struct Unit {
     /// Empty list means no blocking decisions.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub decisions: Vec<String>,
+
+    /// Current derived scheduler-facing autonomy disposition.
+    /// This stores the canonical durable answer without duplicating raw confidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub autonomy_disposition: Option<AutonomyDisposition>,
     /// Override model for this unit. Takes precedence over config-level model settings.
     /// Used as `{model}` substitution in command templates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -436,6 +441,8 @@ struct UnitWire {
     #[serde(default)]
     decisions: Vec<String>,
     #[serde(default)]
+    autonomy_disposition: Option<AutonomyDisposition>,
+    #[serde(default)]
     model: Option<String>,
 }
 
@@ -488,6 +495,7 @@ impl From<UnitWire> for Unit {
             created_by: raw.created_by,
             feature: raw.feature,
             decisions: raw.decisions,
+            autonomy_disposition: raw.autonomy_disposition,
             model: raw.model,
         }
     }
@@ -555,6 +563,7 @@ impl Unit {
             attempt_log: Vec::new(),
             created_by: None,
             decisions: Vec::new(),
+            autonomy_disposition: None,
             model: None,
         })
     }
@@ -768,6 +777,9 @@ impl Unit {
             "stale_after" => self.stale_after = serde_json::from_str(json_value)?,
             "paths" => self.paths = serde_json::from_str(json_value)?,
             "decisions" => self.decisions = serde_json::from_str(json_value)?,
+            "autonomy_disposition" => {
+                self.autonomy_disposition = serde_json::from_str(json_value)?
+            },
             "model" => self.model = serde_json::from_str(json_value)?,
             _ => return Err(anyhow::anyhow!("Unknown field: {}", field)),
         }
@@ -945,10 +957,25 @@ verify: cargo test
             attempt_log: Vec::new(),
             created_by: Some("alice".to_string()),
             decisions: vec!["JWT or sessions?".to_string()],
+            autonomy_disposition: Some(AutonomyDisposition {
+                kind: AutonomyDispositionKind::Blocked,
+                blockers: vec![
+                    AutonomyBlockerCode::UnresolvedDecision,
+                    AutonomyBlockerCode::ReviewPending,
+                ],
+                review: ReviewState::Pending,
+                verify: VerifyPosture::Deferred,
+                visibility: VisibilityState::Satisfied,
+                attempt_pressure: AttemptPressure::WithinBudget,
+                risk: RiskBand::Normal,
+                provenance: AutonomyProvenance::Mixed,
+                continuation_budget: Some(2),
+            }),
             model: Some("claude-sonnet".to_string()),
         };
 
         let yaml = serde_yml::to_string(&unit).unwrap();
+        assert!(yaml.contains("autonomy_disposition:"));
         let restored: Unit = serde_yml::from_str(&yaml).unwrap();
 
         assert_eq!(unit, restored);
@@ -980,6 +1007,7 @@ verify: cargo test
         assert!(!yaml.contains("on_close:"));
         assert!(!yaml.contains("history:"));
         assert!(!yaml.contains("outputs:"));
+        assert!(!yaml.contains("autonomy_disposition:"));
     }
 
     #[test]
