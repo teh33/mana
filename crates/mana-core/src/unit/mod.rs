@@ -131,6 +131,9 @@ pub struct Unit {
     /// Shell command that must exit 0 to close the unit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verify: Option<String>,
+    /// Optional fast verify command to run before the full verify gate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_fast: Option<String>,
     /// Whether this unit was created with --fail-first (enforced TDD).
     /// Records that the verify command was proven to fail before creation.
     #[serde(default, skip_serializing_if = "is_false")]
@@ -363,6 +366,8 @@ struct UnitWire {
     #[serde(default)]
     verify: Option<String>,
     #[serde(default)]
+    verify_fast: Option<String>,
+    #[serde(default)]
     fail_first: bool,
     #[serde(default)]
     checkpoint: Option<String>,
@@ -457,6 +462,7 @@ impl From<UnitWire> for Unit {
             parent: raw.parent,
             dependencies: raw.dependencies,
             verify: raw.verify,
+            verify_fast: raw.verify_fast,
             fail_first: raw.fail_first,
             checkpoint: raw.checkpoint,
             verify_hash: raw.verify_hash,
@@ -523,6 +529,7 @@ impl Unit {
             parent: None,
             dependencies: Vec::new(),
             verify: None,
+            verify_fast: None,
             fail_first: false,
             checkpoint: None,
             verify_hash: None,
@@ -902,6 +909,7 @@ verify: cargo test
             parent: Some("3.2".to_string()),
             dependencies: vec!["3.1".to_string()],
             verify: Some("cargo test unit::check".to_string()),
+            verify_fast: Some("cargo check -p mana-core".to_string()),
             fail_first: false,
             checkpoint: None,
             verify_hash: None,
@@ -962,6 +970,7 @@ verify: cargo test
         assert!(!yaml.contains("labels:"));
         assert!(!yaml.contains("dependencies:"));
         assert!(!yaml.contains("verify:"));
+        assert!(!yaml.contains("verify_fast:"));
         assert!(!yaml.contains("attempts:"));
         assert!(!yaml.contains("max_attempts:"));
         assert!(!yaml.contains("claimed_by:"));

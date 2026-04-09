@@ -32,6 +32,10 @@ pub struct PoolConfig {
     pub batch_verify: bool,
     /// Lock files listed in unit paths to prevent concurrent modification.
     pub file_locking: bool,
+    /// Enable isolated git worktrees for each dispatched agent.
+    pub use_worktrees: bool,
+    /// Base directory for agent worktrees. Defaults to `.mana/worktrees/`.
+    pub worktree_base: Option<PathBuf>,
     /// Model override for agent spawning (substituted into templates).
     pub run_model: Option<String>,
     /// Path to the .mana/ directory.
@@ -52,6 +56,8 @@ pub struct DispatchUnit {
     pub requires: Vec<String>,
     /// File paths this unit touches — used for conflict detection.
     pub paths: Vec<String>,
+    /// Optional fast verify command to run before the full verify gate.
+    pub verify_fast: Option<String>,
     /// Deferred verify command to run after agent completion when batch verify is enabled.
     pub verify_command: Option<String>,
     /// Retry context derived from the unit's attempt history.
@@ -175,6 +181,8 @@ pub trait Spawner: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct SpawnConfig {
     pub mana_dir: PathBuf,
+    /// Project or worktree directory where the agent should execute.
+    pub repo_path: PathBuf,
     pub timeout_minutes: u32,
     pub idle_timeout_minutes: u32,
     pub run_model: Option<String>,

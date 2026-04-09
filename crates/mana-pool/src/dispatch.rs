@@ -1,9 +1,12 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::{mpsc, Arc};
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use mana_core::util::natural_cmp;
+use mana_core::worktree::{MergeResult, WorktreeInfo};
 
 use crate::memory;
 use crate::types::*;
@@ -56,6 +59,23 @@ where
     }
 
     results
+}
+
+fn apply_verify_failure(
+    results: &mut [AgentResult],
+    unit_id: &str,
+    message: &str,
+) -> bool {
+    if let Some(result) = results.iter_mut().find(|result| result.unit_id == unit_id) {
+        result.success = false;
+        result.error.get_or_insert_with(|| message.to_string());
+        result
+            .failure_summary
+            .get_or_insert_with(|| message.to_string());
+        true
+    } else {
+        false
+    }
 }
 
 fn drain_progress_events(
@@ -118,8 +138,7 @@ fn execute_verify_groups(
         .filter(|unit| results.iter().any(|result| result.unit_id == unit.id && result.success))
         .cloned()
         .collect();
-    let groups = group_verify_commands(&successful_units);
-    if groups.is_empty() {
+    if successful_units.is_empty() {
         return Ok(false);
     }
 
@@ -128,20 +147,50 @@ fn execute_verify_groups(
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Cannot determine project root from mana dir"))?;
 
-    let verify_results = run_verify_groups(&groups, event_tx, |group| {
+    let fast_groups = group_verify_commands(
+        &successful_units
+            .iter()
+            .filter(|unit| unit.verify_fast.as_ref().is_some_and(|cmd| !cmd.trim().is_empty()))
+            .map(|unit| DispatchUnit {
+                verify_command: unit.verify_fast.clone(),
+                ..unit.clone()
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    let fast_results = run_verify_groups(&fast_groups, event_tx, |group| {
+        mana_core::ops::verify::run_verify_command(&group.command, project_root, None)
+            .map(|result| result.passed)
+            .unwrap_or(false)
+    });
+
+    let full_groups = group_verify_commands(
+        &successful_units
+            .iter()
+            .filter(|unit| {
+                unit.verify_command.as_ref().is_some_and(|cmd| !cmd.trim().is_empty())
+                    && fast_results.get(&unit.id) != Some(&false)
+            })
+            .cloned()
+            .collect::<Vec<_>>(),
+    );
+
+    let full_results = run_verify_groups(&full_groups, event_tx, |group| {
         mana_core::ops::verify::run_verify_command(&group.command, project_root, None)
             .map(|result| result.passed)
             .unwrap_or(false)
     });
 
     let mut any_failed = false;
-    for result in results.iter_mut() {
-        if verify_results.get(&result.unit_id) == Some(&false) {
-            result.success = false;
-            result.error.get_or_insert_with(|| "verify failed".to_string());
-            result
-                .failure_summary
-                .get_or_insert_with(|| "verify failed".to_string());
+
+    for (unit_id, passed) in fast_results {
+        if !passed && apply_verify_failure(results, &unit_id, "fast verify failed") {
+            any_failed = true;
+        }
+    }
+
+    for (unit_id, passed) in full_results {
+        if !passed && apply_verify_failure(results, &unit_id, "verify failed") {
             any_failed = true;
         }
     }
@@ -175,6 +224,143 @@ fn finish_dispatch(
         any_failed,
     })
 }
+
+fn project_root(mana_dir: &Path) -> Result<&Path> {
+    mana_dir
+        .parent()
+        .ok_or_else(|| anyhow!("Cannot determine project root from mana dir"))
+}
+
+fn resolve_worktree_base(config: &PoolConfig, project_root: &Path) -> PathBuf {
+    match &config.worktree_base {
+        Some(path) if path.is_absolute() => path.clone(),
+        Some(path) => project_root.join(path),
+        None => config.mana_dir.join("worktrees"),
+    }
+}
+
+fn sanitize_worktree_component(value: &str) -> String {
+    let sanitized: String = value
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect();
+    sanitized.trim_matches('-').to_string()
+}
+
+fn unique_worktree_suffix() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+fn create_worktree_for_unit(config: &PoolConfig, unit: &DispatchUnit) -> Result<WorktreeInfo> {
+    let project_root = project_root(&config.mana_dir)?;
+    let base = resolve_worktree_base(config, project_root);
+    std::fs::create_dir_all(&base)
+        .with_context(|| format!("Failed to create worktree base {}", base.display()))?;
+
+    let safe_id = sanitize_worktree_component(&unit.id);
+    let suffix = unique_worktree_suffix();
+    let branch = format!("mana-pool-{}-{}", safe_id, suffix);
+    let worktree_path = base.join(format!("{}-{}", safe_id, suffix));
+
+    let output = Command::new("git")
+        .args(["-C", &project_root.to_string_lossy()])
+        .args([
+            "worktree",
+            "add",
+            &worktree_path.to_string_lossy(),
+            "-b",
+            &branch,
+        ])
+        .output()
+        .with_context(|| format!("Failed to run git worktree add for unit {}", unit.id))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(anyhow!(
+            "git worktree add failed for unit {}: {}{}{}",
+            unit.id,
+            stdout.trim(),
+            if stdout.trim().is_empty() || stderr.trim().is_empty() {
+                ""
+            } else {
+                "\n"
+            },
+            stderr.trim()
+        ));
+    }
+
+    Ok(WorktreeInfo {
+        main_path: project_root.to_path_buf(),
+        worktree_path,
+        branch,
+    })
+}
+
+fn update_result_failure(result: &mut AgentResult, message: String) {
+    result.success = false;
+    result.error.get_or_insert_with(|| message.clone());
+    result.failure_summary.get_or_insert(message);
+}
+
+fn finalize_completed_result(
+    config: &PoolConfig,
+    mut result: AgentResult,
+    running_paths: &mut HashSet<String>,
+    running_unit_paths: &mut HashMap<String, Vec<String>>,
+    running_worktrees: &mut HashMap<String, WorktreeInfo>,
+) -> AgentResult {
+    if !config.use_worktrees {
+        if let Some(paths) = running_unit_paths.remove(&result.unit_id) {
+            for p in &paths {
+                running_paths.remove(p);
+            }
+        }
+        return result;
+    }
+
+    let Some(worktree) = running_worktrees.remove(&result.unit_id) else {
+        return result;
+    };
+
+    if result.success {
+        let commit_message = format!("feat(unit-{}): {}", result.unit_id, result.title);
+        let merge_result = mana_core::worktree::commit_worktree_changes(
+            &worktree.worktree_path,
+            &commit_message,
+        )
+        .and_then(|_| mana_core::worktree::merge_to_main(&worktree, &result.unit_id));
+
+        match merge_result {
+            Ok(MergeResult::Success) | Ok(MergeResult::NothingToCommit) => {
+                let _ = mana_core::worktree::cleanup_worktree(&worktree);
+            }
+            Ok(MergeResult::Conflict { files }) => {
+                let detail = if files.is_empty() {
+                    "worktree merge conflicted".to_string()
+                } else {
+                    format!("worktree merge conflicted: {}", files.join(", "))
+                };
+                update_result_failure(&mut result, detail);
+                let _ = mana_core::worktree::cleanup_worktree(&worktree);
+            }
+            Err(err) => {
+                update_result_failure(&mut result, format!("worktree merge failed: {err}"));
+                let _ = mana_core::worktree::cleanup_worktree(&worktree);
+            }
+        }
+    } else if let Err(err) = mana_core::worktree::cleanup_worktree(&worktree) {
+        let message = format!("worktree cleanup failed: {err}");
+        result.error.get_or_insert_with(|| message.clone());
+        result.failure_summary.get_or_insert(message);
+    }
+
+    result
+}
+
 
 /// Run a full dispatch cycle: schedule units respecting dependencies, concurrency,
 /// and memory limits. Spawns agents via the provided `Spawner` implementation.
@@ -230,9 +416,10 @@ fn run_dispatch_with_options(
         std::time::Duration::from_secs((config.idle_timeout_minutes as u64) * 60)
     });
 
-    // Track file paths of running units to avoid scheduling conflicts
+    // Track file paths of running units to avoid scheduling conflicts when worktrees are disabled
     let mut running_paths: HashSet<String> = HashSet::new();
     let mut running_unit_paths: HashMap<String, Vec<String>> = HashMap::new();
+    let mut running_worktrees: HashMap<String, WorktreeInfo> = HashMap::new();
 
     // Channel for completed agents to report back
     let (result_tx, result_rx) = mpsc::channel::<AgentResult>();
@@ -251,6 +438,11 @@ fn run_dispatch_with_options(
 
     let spawn_config = SpawnConfig {
         mana_dir: config.mana_dir.clone(),
+        repo_path: config
+            .mana_dir
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine project root from mana dir"))?
+            .to_path_buf(),
         timeout_minutes: config.timeout_minutes,
         idle_timeout_minutes: config.idle_timeout_minutes,
         run_model: config.run_model.clone(),
@@ -306,19 +498,30 @@ fn run_dispatch_with_options(
                 break;
             }
 
-            // Skip units whose paths conflict with running agents
-            if unit.paths.iter().any(|p| running_paths.contains(p)) {
+            // Skip units whose paths conflict with running agents when worktrees are disabled
+            if !config.use_worktrees && unit.paths.iter().any(|p| running_paths.contains(p)) {
                 continue;
             }
+
+            let worktree = if config.use_worktrees {
+                Some(create_worktree_for_unit(config, &unit)?)
+            } else {
+                None
+            };
 
             remaining.remove(&unit.id);
             running_count += 1;
 
-            // Register paths as occupied
-            for p in &unit.paths {
-                running_paths.insert(p.clone());
+            // Register paths as occupied only in fallback file-locking mode
+            if !config.use_worktrees {
+                for p in &unit.paths {
+                    running_paths.insert(p.clone());
+                }
+                running_unit_paths.insert(unit.id.clone(), unit.paths.clone());
             }
-            running_unit_paths.insert(unit.id.clone(), unit.paths.clone());
+            if let Some(worktree) = &worktree {
+                running_worktrees.insert(unit.id.clone(), worktree.clone());
+            }
             running_last_progress.insert(unit.id.clone(), Instant::now());
             running_stuck_emitted.remove(&unit.id);
 
@@ -333,6 +536,10 @@ fn run_dispatch_with_options(
             let tx = result_tx.clone();
             let progress_tx_for_unit = progress_tx.clone();
             let cfg = SpawnConfig {
+                repo_path: worktree
+                    .as_ref()
+                    .map(|wt| wt.worktree_path.clone())
+                    .unwrap_or_else(|| spawn_config.repo_path.clone()),
                 retry: unit.retry.clone(),
                 ..spawn_config.clone()
             };
@@ -376,6 +583,13 @@ fn run_dispatch_with_options(
                         if let Ok(r) = result_rx.recv_timeout(poll_interval)
                         {
                             running_count -= 1;
+                            let r = finalize_completed_result(
+                                config,
+                                r,
+                                &mut running_paths,
+                                &mut running_unit_paths,
+                                &mut running_worktrees,
+                            );
                             let _ = event_tx.send(PoolEvent::Completed { result: r.clone() });
                             results.push(r);
                         }
@@ -422,13 +636,13 @@ fn run_dispatch_with_options(
             running_last_progress.remove(&result.unit_id);
             running_stuck_emitted.remove(&result.unit_id);
 
-            // Release paths
-            if let Some(paths) = running_unit_paths.remove(&result.unit_id) {
-                for p in &paths {
-                    running_paths.remove(p);
-                }
-            }
-
+            let result = finalize_completed_result(
+                config,
+                result,
+                &mut running_paths,
+                &mut running_unit_paths,
+                &mut running_worktrees,
+            );
             let success = result.success;
             let unit_id = result.unit_id.clone();
 
@@ -452,6 +666,13 @@ fn run_dispatch_with_options(
                     while running_count > 0 {
                         if let Ok(r) = result_rx.recv() {
                             running_count -= 1;
+                            let r = finalize_completed_result(
+                                config,
+                                r,
+                                &mut running_paths,
+                                &mut running_unit_paths,
+                                &mut running_worktrees,
+                            );
                             let _ = event_tx.send(PoolEvent::Completed { result: r.clone() });
                             results.push(r);
                         }
@@ -480,6 +701,13 @@ fn run_dispatch_with_options(
         &mut running_stuck_emitted,
     );
     while let Ok(result) = result_rx.try_recv() {
+        let result = finalize_completed_result(
+            config,
+            result,
+            &mut running_paths,
+            &mut running_unit_paths,
+            &mut running_worktrees,
+        );
         let _ = event_tx.send(PoolEvent::Completed {
             result: result.clone(),
         });
@@ -678,6 +906,7 @@ mod tests {
             produces: vec![],
             requires: vec![],
             paths: vec![],
+            verify_fast: None,
             verify_command: None,
             retry: RetryContext {
                 attempt_number: 0,
@@ -696,6 +925,8 @@ mod tests {
             keep_going: false,
             batch_verify: false,
             file_locking: false,
+            use_worktrees: false,
+            worktree_base: None,
             run_model: None,
             mana_dir: std::path::PathBuf::from("/tmp/test-mana"),
         }
@@ -915,6 +1146,225 @@ mod tests {
         assert!(verify_events.iter().any(|(command, unit_ids, success)| {
             command == "true" && unit_ids == &vec!["3".to_string()] && *success
         }));
+    }
+
+    #[test]
+    fn layered_verify_fast_fails_skips_full() {
+        struct SuccessSpawner;
+        impl Spawner for SuccessSpawner {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let mut config = pool_config();
+        config.batch_verify = true;
+        config.mana_dir = std::path::PathBuf::from("/tmp");
+
+        let units = vec![DispatchUnit {
+            verify_fast: Some("exit 1".to_string()),
+            verify_command: Some("echo full >> layered_verify_should_not_run && true".to_string()),
+            ..unit("1", &[])
+        }];
+        let (event_tx, event_rx) = mpsc::channel();
+
+        let sentinel = std::path::Path::new("/tmp/layered_verify_should_not_run");
+        let _ = std::fs::remove_file(sentinel);
+
+        let outcome = run_dispatch(
+            &config,
+            &units,
+            &HashSet::new(),
+            Arc::new(SuccessSpawner),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+
+        assert!(outcome.any_failed);
+        let result = outcome.results.iter().find(|result| result.unit_id == "1").unwrap();
+        assert!(!result.success);
+        assert_eq!(result.error.as_deref(), Some("fast verify failed"));
+        assert!(!sentinel.exists(), "full verify should be skipped after fast verify failure");
+
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        let verify_events: Vec<(String, Vec<String>, bool)> = events
+            .into_iter()
+            .filter_map(|event| match event {
+                PoolEvent::VerifyGroupRun {
+                    command,
+                    unit_ids,
+                    success,
+                } => Some((command, unit_ids, success)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(verify_events.len(), 1);
+        assert_eq!(verify_events[0].0, "exit 1");
+        assert_eq!(verify_events[0].1, vec!["1".to_string()]);
+        assert!(!verify_events[0].2);
+    }
+
+    #[test]
+    fn layered_verify_fast_passes_runs_full() {
+        struct SuccessSpawner;
+        impl Spawner for SuccessSpawner {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let mut config = pool_config();
+        config.batch_verify = true;
+        config.mana_dir = std::path::PathBuf::from("/tmp");
+
+        let fast_marker = std::path::Path::new("/tmp/layered_verify_fast_passes_marker_fast");
+        let full_marker = std::path::Path::new("/tmp/layered_verify_fast_passes_marker_full");
+        let _ = std::fs::remove_file(fast_marker);
+        let _ = std::fs::remove_file(full_marker);
+
+        let units = vec![DispatchUnit {
+            verify_fast: Some(format!("touch {}", fast_marker.display())),
+            verify_command: Some(format!("touch {}", full_marker.display())),
+            ..unit("1", &[])
+        }];
+        let (event_tx, event_rx) = mpsc::channel();
+
+        let outcome = run_dispatch(
+            &config,
+            &units,
+            &HashSet::new(),
+            Arc::new(SuccessSpawner),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+
+        assert!(!outcome.any_failed);
+        let result = outcome.results.iter().find(|result| result.unit_id == "1").unwrap();
+        assert!(result.success);
+        assert!(fast_marker.exists(), "fast verify should run before full verify");
+        assert!(full_marker.exists(), "full verify should run after fast verify passes");
+
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        let verify_events: Vec<(String, Vec<String>, bool)> = events
+            .into_iter()
+            .filter_map(|event| match event {
+                PoolEvent::VerifyGroupRun {
+                    command,
+                    unit_ids,
+                    success,
+                } => Some((command, unit_ids, success)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(verify_events.len(), 2);
+        assert_eq!(verify_events[0].0, format!("touch {}", fast_marker.display()));
+        assert_eq!(verify_events[1].0, format!("touch {}", full_marker.display()));
+        assert!(verify_events[0].2);
+        assert!(verify_events[1].2);
+    }
+
+    #[test]
+    fn layered_verify_no_fast_runs_full_directly() {
+        struct SuccessSpawner;
+        impl Spawner for SuccessSpawner {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let mut config = pool_config();
+        config.batch_verify = true;
+        config.mana_dir = std::path::PathBuf::from("/tmp");
+
+        let full_marker = std::path::Path::new("/tmp/layered_verify_no_fast_marker_full");
+        let _ = std::fs::remove_file(full_marker);
+
+        let units = vec![DispatchUnit {
+            verify_command: Some(format!("touch {}", full_marker.display())),
+            ..unit("1", &[])
+        }];
+        let (event_tx, event_rx) = mpsc::channel();
+
+        let outcome = run_dispatch(
+            &config,
+            &units,
+            &HashSet::new(),
+            Arc::new(SuccessSpawner),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+
+        assert!(!outcome.any_failed);
+        let result = outcome.results.iter().find(|result| result.unit_id == "1").unwrap();
+        assert!(result.success);
+        assert!(full_marker.exists(), "full verify should run directly when no fast verify is configured");
+
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        let verify_events: Vec<(String, Vec<String>, bool)> = events
+            .into_iter()
+            .filter_map(|event| match event {
+                PoolEvent::VerifyGroupRun {
+                    command,
+                    unit_ids,
+                    success,
+                } => Some((command, unit_ids, success)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(verify_events.len(), 1);
+        assert_eq!(verify_events[0].0, format!("touch {}", full_marker.display()));
+        assert!(verify_events[0].2);
     }
 
     #[test]
