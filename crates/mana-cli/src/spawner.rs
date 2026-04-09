@@ -1,8 +1,14 @@
-//! Agent-agnostic process spawning, tracking, and log capture.
+//! Compatibility process spawning, tracking, and log capture for legacy `mana run` flows.
 //!
-//! Provides [`Spawner`] which manages the lifecycle of agent processes:
-//! building commands from config templates, redirecting output to log files,
-//! tracking running processes, and handling unit claim/release lifecycle.
+//! Provides [`Spawner`] which manages the lifecycle of agent processes for
+//! legacy/compatibility execution paths: building commands from config templates,
+//! redirecting output to log files, tracking running processes, and handling
+//! unit claim/release lifecycle.
+//!
+//! This module is migration scaffolding, not the intended long-term execution
+//! center. The preferred primary path is `imp run <unit-id>`, with `mana run`
+//! and template spawning retained here as compatibility behavior during the
+//! transition.
 
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -38,7 +44,7 @@ impl std::fmt::Display for AgentAction {
     }
 }
 
-/// A running agent process tracked by the spawner.
+/// A running agent process tracked by the compatibility spawner.
 pub struct AgentProcess {
     pub unit_id: String,
     pub unit_title: String,
@@ -61,9 +67,11 @@ pub struct CompletedAgent {
     pub log_path: PathBuf,
 }
 
-/// Agent-agnostic process spawner with tracking and log capture.
+/// Agent-agnostic process spawner for legacy/compatibility flows.
 ///
-/// Manages the full lifecycle: claim → spawn → track → complete/release.
+/// Manages compatibility lifecycle scaffolding: claim → spawn → track →
+/// complete/release. Keep this working during migration, but do not treat it as
+/// the intended long-term runtime center.
 pub struct Spawner {
     running: HashMap<String, AgentProcess>,
 }
@@ -121,7 +129,7 @@ impl Spawner {
         }
     }
 
-    /// Spawn an agent for a unit.
+    /// Spawn an agent for a unit through the legacy/compatibility path.
     ///
     /// 1. Selects the command template from config (`run` or `plan`)
     /// 2. Substitutes `{id}` with the unit ID
@@ -129,6 +137,10 @@ impl Spawner {
     /// 4. Opens a log file for stdout/stderr capture
     /// 5. Spawns the process via `sh -c <cmd>`
     /// 6. Registers the process in the agents persistence file
+    ///
+    /// This remains useful migration scaffolding while the repo still supports
+    /// `mana run` and shell-template dispatch, but it is not the intended
+    /// long-term execution center.
     pub fn spawn(
         &mut self,
         unit_id: &str,
@@ -177,7 +189,7 @@ impl Spawner {
             .try_clone()
             .context("Failed to clone log file handle")?;
 
-        // Set IMP_MODE so headless agents get the right tool restrictions.
+        // Set IMP_MODE so legacy headless compatibility flows get the right tool restrictions.
         let imp_mode = match action {
             AgentAction::Implement => "worker",
             AgentAction::Plan => "planner",
@@ -782,6 +794,7 @@ mod tests {
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("No run template"), "Got: {}", msg);
+        assert!(!msg.contains("primary execution center"));
     }
 
     #[test]
