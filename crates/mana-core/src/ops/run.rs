@@ -24,7 +24,7 @@ use anyhow::Result;
 use crate::blocking::check_blocked_with_archive;
 use crate::discovery::find_unit_file;
 use crate::index::{ArchiveIndex, Index, IndexEntry};
-use crate::unit::{Status, Unit, UnitKind};
+use crate::unit::{AutonomyBlockerCode, Status, Unit, UnitKind};
 use crate::util::natural_cmp;
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,11 @@ pub struct BlockedUnit {
     pub id: String,
     pub title: String,
     pub reason: String,
+    /// Canonical autonomy blocker code when this blocked reason maps to the
+    /// scheduler-visible autonomy contract.
+    pub blocker: Option<AutonomyBlockerCode>,
+    /// Unresolved decision prompts when `blocker == Some(UnresolvedDecision)`.
+    pub decisions: Vec<String>,
 }
 
 /// The result of computing the ready queue.
@@ -245,6 +250,21 @@ fn build_ready_unit(entry: &IndexEntry, unit: &Unit, weight: u32) -> ReadyUnit {
     }
 }
 
+/// Build a canonical blocked unit for unresolved durable decisions.
+fn unresolved_decision_blocked_unit(entry: &IndexEntry, unit: &Unit) -> Option<BlockedUnit> {
+    if unit.decisions.is_empty() {
+        return None;
+    }
+
+    Some(BlockedUnit {
+        id: entry.id.clone(),
+        title: entry.title.clone(),
+        reason: "unresolved_decision".to_string(),
+        blocker: Some(AutonomyBlockerCode::UnresolvedDecision),
+        decisions: unit.decisions.clone(),
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -294,20 +314,29 @@ pub fn compute_ready_queue(
     // Collect dispatchable entries
     let mut entries_and_units: Vec<(&IndexEntry, Unit)> = Vec::new();
     for entry in &candidates {
+        let unit_path = find_unit_file(mana_dir, &entry.id)?;
+        let unit = Unit::from_file(&unit_path)?;
+
         if !simulate {
+            if let Some(blocked) = unresolved_decision_blocked_unit(entry, &unit) {
+                blocked.push(blocked);
+                continue;
+            }
+
             if let Some(reason) = check_blocked_with_archive(entry, &index, Some(&archive)) {
                 blocked.push(BlockedUnit {
                     id: entry.id.clone(),
                     title: entry.title.clone(),
                     reason: reason.to_string(),
+                    blocker: None,
+                    decisions: Vec::new(),
                 });
                 continue;
             }
         }
-        let unit_path = find_unit_file(mana_dir, &entry.id)?;
-        let unit = Unit::from_file(&unit_path)?;
         entries_and_units.push((entry, unit));
     }
+
 
     // Build provisional list (weight = 1), then compute real weights and update
     let mut ready_units: Vec<ReadyUnit> = entries_and_units

@@ -1072,6 +1072,31 @@ updated_at: "2025-01-01T00:00:00Z"
         assert_eq!(unit.kind, UnitKind::Epic);
         assert!(unit.description.is_none());
         assert!(unit.labels.is_empty());
+        assert!(unit.autonomy_disposition.is_none());
+    }
+
+    #[test]
+    fn autonomy_disposition_round_trips_on_unit() {
+        let mut unit = Unit::new("6", "Autonomy-ready unit");
+        unit.autonomy_disposition = Some(AutonomyDisposition {
+            kind: AutonomyDispositionKind::Eligible,
+            blockers: Vec::new(),
+            review: ReviewState::NotRequired,
+            verify: VerifyPosture::Passing,
+            visibility: VisibilityState::Satisfied,
+            attempt_pressure: AttemptPressure::WithinBudget,
+            risk: RiskBand::Low,
+            provenance: AutonomyProvenance::Mixed,
+            continuation_budget: Some(3),
+        });
+
+        let yaml = serde_yml::to_string(&unit).unwrap();
+        let restored: Unit = serde_yml::from_str(&yaml).unwrap();
+
+        assert_eq!(restored.autonomy_disposition, unit.autonomy_disposition);
+        assert!(yaml.contains("autonomy_disposition:"));
+        assert!(yaml.contains("kind: eligible"));
+        assert!(yaml.contains("continuation_budget: 3"));
     }
 
     #[test]

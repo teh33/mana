@@ -147,6 +147,11 @@ pub struct AutonomyDisposition {
 }
 
 /// Attempt- or verify-scoped autonomy observation retained as evidence.
+///
+/// This is intentionally limited to typed, durable visibility evidence that
+/// `imp` can publish upstream for later policy evaluation in `mana-core`.
+/// It must not carry raw confidence, confidence thresholds, model self-report,
+/// scheduler commands, or free-text heuristic export.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutonomyObservation {
     pub visibility: VisibilityState,
@@ -694,6 +699,29 @@ mod tests {
     }
 
     #[test]
+    fn autonomy_observation_round_trip_omits_optional_fields() {
+        let observation = AutonomyObservation {
+            visibility: VisibilityState::NotApplicable,
+            provenance: AutonomyProvenance::AttemptObservation,
+            source_attempt: None,
+            observed_at: None,
+            continuation_budget_delta: None,
+        };
+
+        let yaml = serde_yml::to_string(&observation).unwrap();
+        let restored: AutonomyObservation = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(restored, observation);
+        assert!(yaml.contains("visibility: not_applicable"));
+        assert!(yaml.contains("provenance: attempt_observation"));
+        assert!(!yaml.contains("source_attempt:"));
+        assert!(!yaml.contains("observed_at:"));
+        assert!(!yaml.contains("continuation_budget_delta:"));
+        assert!(!yaml.contains("confidence"));
+        assert!(!yaml.contains("threshold"));
+        assert!(!yaml.contains("summary:"));
+    }
+
+    #[test]
     fn run_result_serializes_as_snake_case() {
         assert_eq!(
             serde_yml::to_string(&RunResult::Pass).unwrap().trim(),
@@ -794,6 +822,37 @@ mod tests {
         assert!(yaml.contains("cancelled"));
         let restored: RunRecord = serde_yml::from_str(&yaml).unwrap();
         assert_eq!(restored.result, RunResult::Cancelled);
+    }
+
+    #[test]
+    fn attempt_record_round_trip_with_autonomy_observation() {
+        let now = Utc::now();
+        let record = AttemptRecord {
+            num: 4,
+            outcome: AttemptOutcome::Success,
+            notes: Some("completed visible mana-backed follow-up".to_string()),
+            agent: Some("imp".to_string()),
+            started_at: Some(now),
+            finished_at: Some(now),
+            autonomy_observation: Some(AutonomyObservation {
+                visibility: VisibilityState::Satisfied,
+                provenance: AutonomyProvenance::AttemptObservation,
+                source_attempt: Some(4),
+                observed_at: Some(now),
+                continuation_budget_delta: Some(1),
+            }),
+        };
+
+        let yaml = serde_yml::to_string(&record).unwrap();
+        let restored: AttemptRecord = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(restored, record);
+        assert!(yaml.contains("outcome: success"));
+        assert!(yaml.contains("autonomy_observation:"));
+        assert!(yaml.contains("visibility: satisfied"));
+        assert!(yaml.contains("provenance: attempt_observation"));
+        assert!(!yaml.contains("confidence"));
+        assert!(!yaml.contains("threshold"));
+        assert!(!yaml.contains("summary:"));
     }
 
     #[test]
