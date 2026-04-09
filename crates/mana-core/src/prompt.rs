@@ -1,8 +1,15 @@
-//! Structured agent prompt builder.
+//! Structured task-packet and compatibility prompt builder.
 //!
-//! Constructs a multi-section system prompt that gives agents the context
-//! they need to implement a unit successfully. Ports the 11-section
-//! architecture from the pi extension `prompt.ts` into Rust.
+//! Constructs a multi-section task packet that gives runtimes/agents the context
+//! they need to implement a unit successfully. Historically this module also
+//! acted like a final agent-prompt authority; the rebuild is narrowing it toward
+//! durable task/input preparation, with final runtime/system prompt assembly
+//! living in imp.
+//!
+//! The current API still returns a prompt-shaped bundle because legacy
+//! `mana run`/`mana context --agent-prompt` compatibility flows consume it.
+//! Long-term, treat the material here as durable task-packet source content
+//! rather than the final runtime prompt center.
 //!
 //! Sections (in order):
 //! 1. Project Rules
@@ -35,11 +42,11 @@ use crate::unit::{AttemptOutcome, Status, Unit};
 // Public types
 // ---------------------------------------------------------------------------
 
-/// Result of building an agent prompt.
+/// Result of building durable task-packet material for compatibility flows.
 pub struct PromptResult {
-    /// The full system prompt containing all context sections.
+    /// Compatibility system-prompt content assembled from durable task/input sections.
     pub system_prompt: String,
-    /// The user message instructing the agent what to do.
+    /// Compatibility user message for legacy consumers.
     pub user_message: String,
     /// Path to the unit file, for @file injection by the caller.
     pub file_ref: String,
@@ -95,11 +102,11 @@ static PRIORITY_KEYWORDS: LazyLock<Regex> = LazyLock::new(|| {
 // Public API
 // ---------------------------------------------------------------------------
 
-/// Build the full structured agent prompt for a unit.
+/// Build the full structured task-packet material for a unit.
 ///
-/// Returns a [`PromptResult`] containing the system prompt, user message,
-/// and unit file path. The system prompt is assembled from up to 13 sections
-/// that give the agent everything it needs to implement the unit.
+/// Returns a [`PromptResult`] containing compatibility prompt-shaped fields
+/// for current legacy consumers. The content is assembled from up to 13
+/// sections that capture durable task/input material another runtime can use.
 pub fn build_agent_prompt(unit: &Unit, options: &PromptOptions) -> Result<PromptResult> {
     let mana_dir = &options.mana_dir;
     let mut sections: Vec<String> = Vec::new();
@@ -179,14 +186,14 @@ pub fn build_agent_prompt(unit: &Unit, options: &PromptOptions) -> Result<Prompt
     // Assemble system prompt
     let system_prompt = sections.join("\n\n---\n\n");
 
-    // User message
+    // User message (legacy compatibility for current mana-side prompt consumers)
     let mut user_message = String::new();
     if let Some(ref instructions) = options.instructions {
         user_message.push_str(instructions);
         user_message.push_str("\n\n");
     }
     user_message.push_str(&format!(
-        "implement this unit and run mana close {} when done",
+        "implement this unit and hand completion back through the configured runtime/close path for unit {}",
         unit.id
     ));
 
@@ -470,8 +477,8 @@ fn format_approach(unit_id: &str) -> String {
          3. Read referenced files to understand existing patterns\n\
          4. Implement changes file by file\n\
          5. Run the verify command to check your work\n\
-         6. If verify passes, run: mana close {id}\n\
-         7. After closing, share what you learned:\n   \
+         6. If verify passes, hand completion back through the configured runtime/close path for unit {id}\n\
+         7. After completion, record what you learned for future workers:\n   \
             mana update {id} --note \"Discoveries: <brief notes about patterns, conventions, \
             or gotchas you found that might help sibling units>\"\n\
          8. If verify fails, fix and retry\n\
@@ -490,10 +497,10 @@ fn format_verify_gate(unit: &Unit) -> String {
                 "# Verify Gate\n\n\
                  Your verify command is:\n\
                  ```\n{verify}\n```\n\
-                 Batch verify mode: the orchestrator runs this command after you exit — \
+                 Batch verify mode: the orchestrator/runtime runs this command after you exit — \
                  you do not need to run it yourself.\n\
                  Use scoped checks (e.g. `cargo check -p <crate>`) for fast feedback during work.\n\
-                 Signal completion with: mana close {id}",
+                 Signal completion through the configured runtime/close path for unit {id}",
                 verify = verify,
                 id = unit.id
             )
@@ -510,7 +517,7 @@ fn format_verify_gate(unit: &Unit) -> String {
         format!(
             "# Verify Gate\n\n\
              No verify command is set for this unit.\n\
-             When all acceptance criteria are met, run: mana close {}",
+             When all acceptance criteria are met, hand completion back through the configured runtime/close path for unit {}",
             unit.id
         )
     }
@@ -523,8 +530,8 @@ fn format_constraints(unit_id: &str) -> String {
          - Only modify files mentioned in the description unless clearly necessary\n\
          - Don't add dependencies without justification\n\
          - Preserve existing tests\n\
-         - Run the project's test/build commands before closing\n\
-         - When complete, run: mana close {}",
+         - Run the project's test/build commands before handing completion back\n\
+         - When complete, hand completion back through the configured runtime/close path for unit {}",
         unit_id
     )
 }
@@ -1054,7 +1061,7 @@ mod tests {
     #[test]
     fn approach_contains_unit_id() {
         let result = format_approach("42");
-        assert!(result.contains("mana close 42"));
+        assert!(result.contains("configured runtime/close path for unit 42"));
         assert!(result.contains("mana update 42"));
     }
 
@@ -1074,7 +1081,7 @@ mod tests {
         let unit = Unit::new("1", "Test");
         let result = format_verify_gate(&unit);
         assert!(result.contains("No verify command"));
-        assert!(result.contains("mana close 1"));
+        assert!(result.contains("configured runtime/close path for unit 1"));
     }
 
     // -- format_constraints --
@@ -1082,7 +1089,7 @@ mod tests {
     #[test]
     fn constraints_contains_unit_id() {
         let result = format_constraints("7");
-        assert!(result.contains("mana close 7"));
+        assert!(result.contains("configured runtime/close path for unit 7"));
         assert!(result.contains("Don't add dependencies"));
     }
 
@@ -1130,7 +1137,7 @@ mod tests {
         assert!(result.system_prompt.contains("---"));
 
         // User message should contain close instruction
-        assert!(result.user_message.contains("mana close 1"));
+        assert!(result.user_message.contains("configured runtime/close path for unit 1"));
 
         // File ref should point to the unit file
         assert!(result.file_ref.contains("1-simple-task.md"));
@@ -1151,7 +1158,7 @@ mod tests {
 
         let result = build_agent_prompt(&unit, &options).unwrap();
         assert!(result.user_message.starts_with("Focus on performance"));
-        assert!(result.user_message.contains("mana close 1"));
+        assert!(result.user_message.contains("configured runtime/close path for unit 1"));
     }
 
     #[test]
