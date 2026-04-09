@@ -1373,7 +1373,9 @@ fn history_success_creates_run_record() {
     let record = &updated.history[0];
     assert_eq!(record.result, RunResult::Pass);
     assert_eq!(record.attempt, 1);
-    assert!(record.output_snippet.is_none());
+    let snippet = record.output_snippet.as_deref().unwrap_or("");
+    assert!(snippet.contains("verify passed"));
+    assert!(snippet.contains("changed"));
 }
 
 #[test]

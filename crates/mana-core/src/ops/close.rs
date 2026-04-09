@@ -525,6 +525,12 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
     // 4b. Compute close evidence from diff
     let evidence = compute_close_evidence(project_root, unit.checkpoint.as_deref(), &unit.paths);
 
+    if let Some(record) = unit.history.last_mut() {
+        if record.result == RunResult::Pass {
+            record.output_snippet = build_pass_output_snippet(unit.verify.as_deref(), &evidence);
+        }
+    }
+
     // 5. Mark the unit closed
     let now = Utc::now();
     unit.status = Status::Closed;
@@ -827,6 +833,54 @@ pub fn archive_unit(mana_dir: &Path, unit: &mut Unit, unit_path: &Path) -> Resul
 /// a structured history entry. Does not save to disk — caller decides when to write.
 pub fn record_failure(unit: &mut Unit, failure: &VerifyFailure) {
     record_failure_on_unit(unit, failure);
+}
+
+fn build_pass_output_snippet(
+    verify_command: Option<&str>,
+    evidence: &CloseEvidence,
+) -> Option<String> {
+    let mut parts = Vec::new();
+
+    if let Some(verify) = verify_command.map(str::trim).filter(|v| !v.is_empty()) {
+        parts.push(format!("verify passed: {}", verify));
+    } else {
+        parts.push("verify passed".to_string());
+    }
+
+    let file_count = evidence.changed_files.len();
+    if file_count > 0 {
+        let mut scope = format!(
+            "changed {} file{} (+{}/-{})",
+            file_count,
+            if file_count == 1 { "" } else { "s" },
+            evidence.additions,
+            evidence.deletions
+        );
+        if evidence.only_mana_changes {
+            scope.push_str(", only .mana changes");
+        }
+        if evidence.no_path_overlap {
+            scope.push_str(", no declared path overlap");
+        }
+        parts.push(scope);
+    } else if evidence.only_mana_changes || evidence.no_path_overlap {
+        let mut scope_flags = Vec::new();
+        if evidence.only_mana_changes {
+            scope_flags.push("only .mana changes");
+        }
+        if evidence.no_path_overlap {
+            scope_flags.push("no declared path overlap");
+        }
+        if !scope_flags.is_empty() {
+            parts.push(scope_flags.join(", "));
+        }
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("; "))
+    }
 }
 
 /// Process on_fail actions (retry release, escalate).
@@ -1578,7 +1632,10 @@ mod tests {
                 assert_eq!(r.unit.status, Status::Closed);
                 assert!(r.unit.is_archived);
                 assert_eq!(r.unit.history.len(), 1);
-                assert_eq!(r.unit.history[0].result, RunResult::Pass);
+                let record = &r.unit.history[0];
+                assert_eq!(record.result, RunResult::Pass);
+                let snippet = record.output_snippet.as_deref().unwrap_or("");
+                assert!(snippet.contains("verify passed"));
             }
             _ => panic!("Expected Closed outcome"),
         }
