@@ -1,3 +1,6 @@
+// External workspace crates re-exported where helpful for command modules.
+pub extern crate mana_review;
+
 // Core modules — re-exported from mana-core
 pub use crate::commands::run::{
     run_native, run_with_stream_capture, run_with_stream_capture_and_sink, NativeRunParams,
