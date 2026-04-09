@@ -1108,7 +1108,7 @@ mod tests {
         assert!(result.is_ok());
         let prompt = result.unwrap();
         assert!(prompt.system_prompt.contains("Unit Assignment"));
-        assert!(prompt.user_message.contains("mana close 1"));
+        assert!(prompt.user_message.contains("configured runtime/close path for unit 1"));
     }
 
     #[test]

@@ -1,7 +1,9 @@
 //! Agent presets and detection for known coding-agent CLIs.
 //!
-//! Provides built-in presets (pi, claude, aider) with run/plan templates,
-//! and runtime detection of which agents are available on PATH.
+//! Provides built-in presets (pi, claude, aider) with compatibility run/plan
+//! templates, and runtime detection of which agents are available on PATH.
+//! During migration, bias these examples toward `imp run {id}` as the preferred
+//! execution framing instead of mana-centered close language.
 
 use std::process::Command;
 
@@ -11,6 +13,7 @@ pub struct AgentPreset {
     /// Agent name (e.g. "pi", "claude", "aider").
     pub name: &'static str,
     /// Template for running/implementing a unit. Contains `{id}` placeholder.
+    /// Bias this toward `imp run {id}` or equivalent compatibility phrasing.
     pub run_template: &'static str,
     /// Template for planning/splitting a unit. Contains `{id}` placeholder.
     pub plan_template: &'static str,
@@ -36,19 +39,19 @@ pub struct DetectedAgent {
 const PRESETS: &[AgentPreset] = &[
     AgentPreset {
         name: "pi",
-        run_template: "pi @.mana/{id}-*.md \"implement and mana close {id}\"",
+        run_template: "pi @.mana/{id}-*.md \"implement; hand completion back through the configured runtime/close path for unit {id}\"",
         plan_template: "pi @.mana/{id}-*.md \"plan into children with mana create --parent {id}\"",
         version_cmd: "pi --version",
     },
     AgentPreset {
         name: "claude",
-        run_template: "claude -p \"implement unit {id} and run mana close {id}\"",
+        run_template: "imp run {id}",
         plan_template: "claude -p \"unit {id} is too large, split with mana create --parent {id}\"",
         version_cmd: "claude --version",
     },
     AgentPreset {
         name: "aider",
-        run_template: "aider --message \"implement unit {id}, verify with mana close {id}\"",
+        run_template: "imp run {id}",
         plan_template: "aider --message \"plan unit {id} into children with mana create\"",
         version_cmd: "aider --version",
     },

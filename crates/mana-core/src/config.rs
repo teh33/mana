@@ -119,7 +119,7 @@ pub struct Config {
     #[serde(default = "default_auto_close_parent")]
     pub auto_close_parent: bool,
     /// Shell command template for `--run`. Use `{id}` as placeholder for unit ID.
-    /// Example: `claude -p "implement job {id} and run mana close {id}"`.
+    /// Preferred example during migration: `imp run {id}`.
     /// If unset, `--run` will print an error asking the user to configure it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run: Option<String>,
@@ -130,7 +130,7 @@ pub struct Config {
     /// Maximum agent loops before stopping (default: 10, 0 = unlimited)
     #[serde(default = "default_max_loops")]
     pub max_loops: u32,
-    /// Maximum parallel agents for `mana run` (default: 4)
+    /// Maximum parallel compatibility agents for legacy `mana run` behavior (default: 4)
     #[serde(default = "default_max_concurrent")]
     pub max_concurrent: u32,
     /// Seconds between polls in --watch mode (default: 30)
@@ -150,8 +150,8 @@ pub struct Config {
     /// from clobbering the same file.
     #[serde(default, skip_serializing_if = "is_false_bool")]
     pub file_locking: bool,
-    /// Enable git worktree isolation for parallel agents (default: false).
-    /// When enabled, `mana run` creates a separate git worktree for each agent.
+    /// Enable git worktree isolation for parallel compatibility agents (default: false).
+    /// When enabled, legacy `mana run` creates a separate git worktree for each agent.
     /// Each agent works in its own directory, preventing file contention.
     /// On `mana close`, the worktree branch is merged back to main.
     #[serde(default, skip_serializing_if = "is_false_bool")]
@@ -170,7 +170,7 @@ pub struct Config {
     /// Per-unit `verify_timeout` overrides this value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verify_timeout: Option<u64>,
-    /// Adversarial review configuration (`mana review` / `mana run --review`).
+    /// Adversarial review configuration (`mana review` / legacy `mana run --review`).
     /// Optional — review is disabled if not configured.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<ReviewConfig>,
@@ -196,19 +196,19 @@ pub struct Config {
     /// Falls back to `plan` template with a research-oriented prompt if unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub research: Option<String>,
-    /// Model to use for implementing jobs (`mana run`). Substituted into `{model}` in templates.
+    /// Model to use for implementing jobs during legacy `mana run` compatibility flows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_model: Option<String>,
     /// Model to use for planning/splitting epics (`mana plan`). Substituted into `{model}` in templates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_model: Option<String>,
-    /// Model to use for adversarial review (`mana run --review`). Substituted into `{model}` in templates.
+    /// Model to use for adversarial review during legacy `mana run --review` flows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_model: Option<String>,
     /// Model to use for project research (`mana plan` with no args). Substituted into `{model}` in templates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub research_model: Option<String>,
-    /// Enable runner-mediated batch verification (default: false).
+    /// Enable runner-mediated batch verification for legacy `mana run` compatibility behavior (default: false).
     /// When enabled, `mana run` sets `MANA_BATCH_VERIFY=1` on spawned agents.
     /// Agents signal completion without running verify inline; the runner
     /// collects AwaitingVerify units and runs each unique verify command once.
@@ -216,7 +216,7 @@ pub struct Config {
     pub batch_verify: bool,
     /// Minimum available system memory (MB) to keep free when spawning agents.
     /// When set to a non-zero value, `mana run` checks available system memory
-    /// before each agent spawn. If available memory is below this threshold,
+    /// before each compatibility agent spawn. If available memory is below this threshold,
     /// dispatch pauses until a running agent finishes and frees memory.
     /// Default: 0 (disabled). Recommended: 2048–4096 on a 16GB machine.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
