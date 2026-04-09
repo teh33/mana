@@ -527,7 +527,8 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
 
     if let Some(record) = unit.history.last_mut() {
         if record.result == RunResult::Pass {
-            record.output_snippet = build_pass_output_snippet(unit.verify.as_deref(), &evidence);
+            record.output_snippet =
+                build_pass_output_snippet(unit.verify.as_deref(), evidence.as_ref());
         }
     }
 
@@ -837,7 +838,7 @@ pub fn record_failure(unit: &mut Unit, failure: &VerifyFailure) {
 
 fn build_pass_output_snippet(
     verify_command: Option<&str>,
-    evidence: &CloseEvidence,
+    evidence: Option<&CloseEvidence>,
 ) -> Option<String> {
     let mut parts = Vec::new();
 
@@ -847,8 +848,9 @@ fn build_pass_output_snippet(
         parts.push("verify passed".to_string());
     }
 
-    let file_count = evidence.changed_files.len();
+    let file_count = evidence.map(|e| e.changed_files.len()).unwrap_or(0);
     if file_count > 0 {
+        let evidence = evidence.expect("file_count > 0 implies evidence exists");
         let mut scope = format!(
             "changed {} file{} (+{}/-{})",
             file_count,
@@ -863,7 +865,8 @@ fn build_pass_output_snippet(
             scope.push_str(", no declared path overlap");
         }
         parts.push(scope);
-    } else if evidence.only_mana_changes || evidence.no_path_overlap {
+    } else if evidence.map(|e| e.only_mana_changes || e.no_path_overlap).unwrap_or(false) {
+        let evidence = evidence.expect("scope flags imply evidence exists");
         let mut scope_flags = Vec::new();
         if evidence.only_mana_changes {
             scope_flags.push("only .mana changes");
