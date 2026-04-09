@@ -132,7 +132,7 @@ fn print_result_line(result: &AgentResult, outcome: super::UnitOutcome) {
         }
         super::UnitOutcome::AwaitingVerify => {
             eprintln!(
-                "  … {}  {}  {} (awaiting verify){}",
+                "  … {}  {}  {} (candidate complete · awaiting verify){}",
                 result.id, result.title, duration, stats_str
             );
         }

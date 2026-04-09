@@ -54,7 +54,8 @@ pub(super) struct RunConfig {
     /// Config-level model for run/implement (substituted into `{model}` in templates).
     pub run_model: Option<String>,
     /// When true, agents defer verify by exiting with AwaitingVerify status.
-    /// The runner collects all deferred units and runs each unique verify command once.
+    /// The runner then records that the unit is candidate-complete and runs each
+    /// unique verify command once to advance those units toward full completion.
     pub batch_verify: bool,
     /// Minimum available system memory (MB) to reserve. 0 = disabled.
     pub memory_reserve_mb: u64,
@@ -150,6 +151,10 @@ impl fmt::Display for UnitAction {
 }
 
 /// Result of a completed agent.
+///
+/// `AwaitingVerify` means the worker produced a candidate-complete result and
+/// handed it back for later verification. It is a pre-verification success
+/// stage on the path to a fully `Closed` unit, not a separate completion model.
 #[derive(Debug)]
 #[allow(dead_code)]
 struct AgentResult {
