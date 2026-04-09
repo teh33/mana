@@ -492,6 +492,7 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
                 tokens: None,
                 cost: None,
                 output_snippet: None,
+                autonomy_observation: None,
             });
 
             // Capture stdout as unit outputs
@@ -1054,6 +1055,7 @@ fn record_failure_on_unit(unit: &mut Unit, failure: &VerifyFailure) {
         tokens: None,
         cost: None,
         output_snippet,
+        autonomy_observation: None,
     });
 }
 
@@ -1870,6 +1872,7 @@ mod tests {
             agent: Some("agent-1".to_string()),
             started_at: Some(Utc::now()),
             finished_at: None,
+            autonomy_observation: None,
         });
         write_unit(&mana_dir, &unit);
 

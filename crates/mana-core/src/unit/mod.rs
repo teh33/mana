@@ -1511,6 +1511,7 @@ on_close:
                 tokens: None,
                 cost: None,
                 output_snippet: Some("error: test failed".to_string()),
+                autonomy_observation: None,
             },
             RunRecord {
                 attempt: 2,
@@ -1523,6 +1524,7 @@ on_close:
                 tokens: Some(12000),
                 cost: Some(0.05),
                 output_snippet: None,
+                autonomy_observation: None,
             },
         ];
 

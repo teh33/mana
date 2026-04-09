@@ -945,6 +945,7 @@ fn record_attempt_appends_to_log() {
         agent: Some("test-agent".to_string()),
         started_at: Some(now),
         finished_at: Some(now),
+        autonomy_observation: None,
     };
 
     let updated = record_attempt(&mana_dir, "1", attempt).unwrap();

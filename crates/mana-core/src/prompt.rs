@@ -1036,6 +1036,7 @@ mod tests {
             agent: Some("agent-1".to_string()),
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         }];
 
         let result = format_previous_attempts(&unit);

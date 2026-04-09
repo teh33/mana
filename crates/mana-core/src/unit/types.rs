@@ -27,6 +27,135 @@ impl std::fmt::Display for Status {
 }
 
 // ---------------------------------------------------------------------------
+// Autonomy disposition / observation vocabulary
+// ---------------------------------------------------------------------------
+
+/// Top-level scheduler-facing autonomy outcome for a unit's current state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutonomyDispositionKind {
+    Eligible,
+    Blocked,
+    RequiresHuman,
+    Unknown,
+}
+
+/// Typed blocker codes explaining why a unit is not autonomously eligible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutonomyBlockerCode {
+    UnresolvedDecision,
+    HumanCloseRequired,
+    ApprovalRequired,
+    ReviewRequired,
+    ReviewPending,
+    ReviewRejected,
+    VerifyAbsent,
+    VerifyDeferred,
+    VerifyFailed,
+    VerifyFrozenViolation,
+    VerifyQualityUnknown,
+    VisibilityMissing,
+    AttemptBudgetExhausted,
+    CircuitBreakerTripped,
+    RiskTooHigh,
+    PolicyUnknown,
+}
+
+/// Current review / approval posture for autonomy gating.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewState {
+    Unknown,
+    NotRequired,
+    Required,
+    Pending,
+    Approved,
+    Rejected,
+}
+
+/// Current verify posture for scheduler-facing autonomy gating.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VerifyPosture {
+    Unknown,
+    NotApplicable,
+    Absent,
+    Deferred,
+    Passing,
+    Failed,
+    FrozenViolation,
+    QualityUnknown,
+}
+
+/// Whether the unit has enough durable visibility/context for autonomous work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VisibilityState {
+    Unknown,
+    Sufficient,
+    Missing,
+}
+
+/// Normalized retry / attempt pressure relevant to autonomy gating.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttemptPressure {
+    Unknown,
+    WithinBudget,
+    NearLimit,
+    Exhausted,
+    CircuitBreakerTripped,
+}
+
+/// Normalized current risk band for autonomous continuation decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RiskBand {
+    Unknown,
+    Low,
+    Normal,
+    High,
+    Critical,
+}
+
+/// Provenance of the current autonomy disposition or observation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutonomyProvenance {
+    Unknown,
+    Derived,
+    Observed,
+    Human,
+    Imported,
+}
+
+/// Current scheduler-facing autonomy answer persisted on a unit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutonomyDisposition {
+    pub kind: AutonomyDispositionKind,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blockers: Vec<AutonomyBlockerCode>,
+    pub review: ReviewState,
+    pub verify: VerifyPosture,
+    pub visibility: VisibilityState,
+    pub attempt_pressure: AttemptPressure,
+    pub risk: RiskBand,
+    pub provenance: AutonomyProvenance,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub continuation_budget: Option<u32>,
+}
+
+/// Attempt- or verify-scoped autonomy observation retained as evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutonomyObservation {
+    pub visibility: VisibilityState,
+    pub provenance: AutonomyProvenance,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // RunResult / RunRecord (verification history)
 // ---------------------------------------------------------------------------
 
@@ -60,6 +189,8 @@ pub struct RunRecord {
     pub cost: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_snippet: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autonomy_observation: Option<AutonomyObservation>,
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +254,350 @@ pub struct AttemptRecord {
     pub started_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub finished_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autonomy_observation: Option<AutonomyObservation>,
+}
+
+// ---------------------------------------------------------------------------
+// Durable approval / promotion schema
+// ---------------------------------------------------------------------------
+
+/// Durable outcome of the review gate policy applied before approval.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewGateOutcome {
+    Skipped,
+    Optional,
+    Mandatory,
+}
+
+impl std::fmt::Display for ReviewGateOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReviewGateOutcome::Skipped => write!(f, "skipped"),
+            ReviewGateOutcome::Optional => write!(f, "optional"),
+            ReviewGateOutcome::Mandatory => write!(f, "mandatory"),
+        }
+    }
+}
+
+/// Approval-layer decision vocabulary.
+///
+/// This remains distinct from `mana-review`'s `ReviewDecision`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalDecision {
+    Approved,
+    Withheld,
+    Denied,
+}
+
+impl std::fmt::Display for ApprovalDecision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ApprovalDecision::Approved => write!(f, "approved"),
+            ApprovalDecision::Withheld => write!(f, "withheld"),
+            ApprovalDecision::Denied => write!(f, "denied"),
+        }
+    }
+}
+
+/// Lifecycle state of the durable approval record itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalState {
+    Active,
+    Superseded,
+}
+
+/// Who or what made a durable approval or promotion decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DecisionSource {
+    Human,
+    HumanRole,
+    PolicyEngine,
+    Agent,
+    ServiceAccount,
+    MixedWorkflow,
+}
+
+/// Mana-owned snapshot of a risk flag used in approval provenance.
+///
+/// This intentionally stores durable risk lineage without depending on the
+/// `mana-review` crate, which already depends on `mana-core`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RiskFlagRecord {
+    /// Stable kind/code, typically derived from a review-layer flag vocabulary.
+    pub code: String,
+    /// Human-readable explanation for the flag.
+    pub message: String,
+    /// Related file paths, if any.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
+}
+
+/// Durable provenance block for an approval decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApprovalProvenance {
+    /// Unit-level durable linkage.
+    pub unit_id: String,
+    /// Attempt-scoped provenance when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u32>,
+    /// Run-scoped provenance when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    /// Candidate lineage consumed by the approval decision.
+    pub candidate_ref: String,
+    /// Evidence bundle consumed by the approval decision.
+    pub evidence_bundle_ref: String,
+    /// Gate policy or version used.
+    pub gate_policy_ref: String,
+    /// Review-gate outcome applied at decision time.
+    pub review_gate_outcome: ReviewGateOutcome,
+    /// Risk level snapshot, usually derived from `mana-review`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_level: Option<String>,
+    /// Risk flag snapshot, usually derived from `mana-review`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub risk_flags: Vec<RiskFlagRecord>,
+    /// Verify result refs considered by the gate.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verify_refs: Vec<String>,
+    /// Diff/scope evidence ref, e.g. a CloseEvidence-style artifact.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diff_scope_ref: Option<String>,
+    /// Review records considered when present.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_refs: Vec<String>,
+    /// Review decision lineage when present.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_decision_refs: Vec<String>,
+    /// Who or what made the approval decision.
+    pub decision_source: DecisionSource,
+    /// Concrete actor identity when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
+    /// Timestamp for the durable decision.
+    pub recorded_at: DateTime<Utc>,
+}
+
+/// Durable approval record: a post-evidence gate decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApprovalRecord {
+    /// Stable identity for the approval record.
+    pub approval_id: String,
+    /// What durable subject was under approval.
+    pub subject_ref: String,
+    /// Unit-level durable linkage.
+    pub unit_id: String,
+    /// Attempt-scoped provenance when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u32>,
+    /// Run-scoped provenance when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    /// Reference to the candidate output being evaluated.
+    pub candidate_ref: String,
+    /// Reference to the durable evidence bundle consumed by the gate.
+    pub evidence_bundle_ref: String,
+    /// Approval-layer outcome.
+    pub decision: ApprovalDecision,
+    /// Lifecycle state of this approval record.
+    pub state: ApprovalState,
+    /// Who or what made the decision.
+    pub decision_source: DecisionSource,
+    /// Concrete actor identity when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
+    /// Timestamp of the approval decision.
+    pub approved_at: DateTime<Utc>,
+    /// Gate policy or version used.
+    pub gate_policy_ref: String,
+    /// Review gate outcome applied at the approval layer.
+    pub review_gate_outcome: ReviewGateOutcome,
+    /// Durable risk level snapshot, typically derived from `mana-review`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_level: Option<String>,
+    /// Durable risk flags snapshot, typically derived from `mana-review`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub risk_flags: Vec<RiskFlagRecord>,
+    /// Verify result refs considered by the gate.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verify_refs: Vec<String>,
+    /// Diff/scope evidence ref, e.g. a CloseEvidence-style artifact.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diff_scope_ref: Option<String>,
+    /// Review refs considered by the gate.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_refs: Vec<String>,
+    /// Review decision lineage considered by the gate.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_decision_refs: Vec<String>,
+    /// Short explanation of why the approval decision was made.
+    pub basis: String,
+    /// Mandatory provenance block for cold auditability.
+    pub provenance: ApprovalProvenance,
+}
+
+impl ApprovalRecord {
+    /// Validate schema-level invariants for approval lineage.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.review_gate_outcome == ReviewGateOutcome::Mandatory {
+            if self.review_refs.is_empty() {
+                return Err(
+                    "mandatory review gate outcome requires non-empty review_refs".to_string(),
+                );
+            }
+            if self.review_decision_refs.is_empty() {
+                return Err(
+                    "mandatory review gate outcome requires non-empty review_decision_refs"
+                        .to_string(),
+                );
+            }
+        }
+
+        if self.provenance.review_gate_outcome == ReviewGateOutcome::Mandatory {
+            if self.provenance.review_refs.is_empty() {
+                return Err(
+                    "mandatory review gate outcome requires non-empty provenance.review_refs"
+                        .to_string(),
+                );
+            }
+            if self.provenance.review_decision_refs.is_empty() {
+                return Err(
+                    "mandatory review gate outcome requires non-empty provenance.review_decision_refs"
+                        .to_string(),
+                );
+            }
+        }
+
+        if self.candidate_ref != self.provenance.candidate_ref {
+            return Err("approval candidate_ref must match provenance.candidate_ref".to_string());
+        }
+
+        if self.evidence_bundle_ref != self.provenance.evidence_bundle_ref {
+            return Err(
+                "approval evidence_bundle_ref must match provenance.evidence_bundle_ref"
+                    .to_string(),
+            );
+        }
+
+        if self.gate_policy_ref != self.provenance.gate_policy_ref {
+            return Err("approval gate_policy_ref must match provenance.gate_policy_ref".to_string());
+        }
+
+        if self.review_gate_outcome != self.provenance.review_gate_outcome {
+            return Err(
+                "approval review_gate_outcome must match provenance.review_gate_outcome"
+                    .to_string(),
+            );
+        }
+
+        Ok(())
+    }
+}
+
+/// Kind of durable promotion that happened after approval.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromotionKind {
+    AcceptCandidate,
+    CloseUnit,
+    RegisterArtifact,
+    PublishResult,
+    PromoteFact,
+    UnblockDependencies,
+}
+
+/// Structured effect of a promotion step.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PromotionEffect {
+    /// What kind of durable effect occurred.
+    pub kind: String,
+    /// Target affected by the effect when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_ref: Option<String>,
+    /// Human-readable summary of the effect.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+}
+
+/// Durable provenance block for a promotion event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PromotionProvenance {
+    /// Approval record that authorized the transition.
+    pub approval_ref: String,
+    /// Evidence bundle retained for lineage.
+    pub evidence_bundle_ref: String,
+    /// Review linkage when applicable.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_refs: Vec<String>,
+    /// Candidate lineage consumed by the promotion.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_ref: Option<String>,
+    /// Who or what applied the promotion.
+    pub promotion_source: DecisionSource,
+    /// Concrete actor identity when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub promoted_by: Option<String>,
+    /// Timestamp for the promotion event.
+    pub promoted_at: DateTime<Utc>,
+}
+
+/// Durable promotion record: an already-approved state transition that happened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PromotionRecord {
+    /// Stable identity for the promotion event.
+    pub promotion_id: String,
+    /// What durable subject was promoted.
+    pub subject_ref: String,
+    /// Unit-level durable linkage.
+    pub unit_id: String,
+    /// Approval record that authorized the promotion.
+    pub approval_ref: String,
+    /// Evidence bundle retained for lineage and auditability.
+    pub evidence_bundle_ref: String,
+    /// Review linkage when applicable.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_refs: Vec<String>,
+    /// Kind of promotion that occurred.
+    pub promotion_kind: PromotionKind,
+    /// Prior durable state.
+    pub from_state: String,
+    /// Resulting durable state.
+    pub to_state: String,
+    /// Structured durable consequences of the promotion.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<PromotionEffect>,
+    /// Timestamp when promotion was applied.
+    pub promoted_at: DateTime<Utc>,
+    /// Who or what applied the promotion.
+    pub promotion_source: DecisionSource,
+    /// Concrete actor identity when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub promoted_by: Option<String>,
+    /// Mandatory provenance block for cold auditability.
+    pub provenance: PromotionProvenance,
+}
+
+impl PromotionRecord {
+    /// Validate schema-level invariants for promotion lineage.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.approval_ref != self.provenance.approval_ref {
+            return Err("promotion approval_ref must match provenance.approval_ref".to_string());
+        }
+
+        if self.evidence_bundle_ref != self.provenance.evidence_bundle_ref {
+            return Err(
+                "promotion evidence_bundle_ref must match provenance.evidence_bundle_ref"
+                    .to_string(),
+            );
+        }
+
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +637,59 @@ mod tests {
     }
 
     #[test]
+    fn autonomy_blocker_code_serializes_as_snake_case() {
+        let yaml = serde_yml::to_string(&AutonomyBlockerCode::VerifyFrozenViolation).unwrap();
+        assert_eq!(yaml.trim(), "verify_frozen_violation");
+    }
+
+    #[test]
+    fn autonomy_disposition_round_trip_with_budget() {
+        let disposition = AutonomyDisposition {
+            kind: AutonomyDispositionKind::RequiresHuman,
+            blockers: vec![
+                AutonomyBlockerCode::HumanCloseRequired,
+                AutonomyBlockerCode::ReviewPending,
+            ],
+            review: ReviewState::Pending,
+            verify: VerifyPosture::Deferred,
+            visibility: VisibilityState::Sufficient,
+            attempt_pressure: AttemptPressure::NearLimit,
+            risk: RiskBand::High,
+            provenance: AutonomyProvenance::Derived,
+            continuation_budget: Some(1),
+        };
+
+        let yaml = serde_yml::to_string(&disposition).unwrap();
+        let restored: AutonomyDisposition = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(restored, disposition);
+        assert!(yaml.contains("kind: requires_human"));
+        assert!(yaml.contains("human_close_required"));
+        assert!(yaml.contains("review_pending"));
+        assert!(yaml.contains("continuation_budget: 1"));
+    }
+
+    #[test]
+    fn autonomy_disposition_omits_empty_optional_fields() {
+        let disposition = AutonomyDisposition {
+            kind: AutonomyDispositionKind::Unknown,
+            blockers: Vec::new(),
+            review: ReviewState::Unknown,
+            verify: VerifyPosture::Unknown,
+            visibility: VisibilityState::Unknown,
+            attempt_pressure: AttemptPressure::Unknown,
+            risk: RiskBand::Unknown,
+            provenance: AutonomyProvenance::Unknown,
+            continuation_budget: None,
+        };
+
+        let yaml = serde_yml::to_string(&disposition).unwrap();
+        let restored: AutonomyDisposition = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(restored, disposition);
+        assert!(!yaml.contains("blockers:"));
+        assert!(!yaml.contains("continuation_budget:"));
+    }
+
+    #[test]
     fn run_result_serializes_as_snake_case() {
         assert_eq!(
             serde_yml::to_string(&RunResult::Pass).unwrap().trim(),
@@ -195,6 +723,7 @@ mod tests {
             tokens: None,
             cost: None,
             output_snippet: None,
+            autonomy_observation: None,
         };
 
         let yaml = serde_yml::to_string(&record).unwrap();
@@ -209,6 +738,7 @@ mod tests {
         assert!(!yaml.contains("tokens:"));
         assert!(!yaml.contains("cost:"));
         assert!(!yaml.contains("output_snippet:"));
+        assert!(!yaml.contains("autonomy_observation:"));
     }
 
     #[test]
@@ -225,6 +755,11 @@ mod tests {
             tokens: Some(5000),
             cost: Some(0.03),
             output_snippet: Some("FAILED: assertion error".to_string()),
+            autonomy_observation: Some(AutonomyObservation {
+                visibility: VisibilityState::Sufficient,
+                provenance: AutonomyProvenance::Observed,
+                summary: Some("verify run captured enough visibility".to_string()),
+            }),
         };
 
         let yaml = serde_yml::to_string(&record).unwrap();
@@ -246,11 +781,255 @@ mod tests {
             tokens: None,
             cost: None,
             output_snippet: None,
+            autonomy_observation: None,
         };
 
         let yaml = serde_yml::to_string(&record).unwrap();
         assert!(yaml.contains("cancelled"));
         let restored: RunRecord = serde_yml::from_str(&yaml).unwrap();
         assert_eq!(restored.result, RunResult::Cancelled);
+    }
+
+    #[test]
+    fn review_gate_outcome_serializes_as_snake_case() {
+        assert_eq!(
+            serde_yml::to_string(&ReviewGateOutcome::Skipped)
+                .unwrap()
+                .trim(),
+            "skipped"
+        );
+        assert_eq!(
+            serde_yml::to_string(&ReviewGateOutcome::Optional)
+                .unwrap()
+                .trim(),
+            "optional"
+        );
+        assert_eq!(
+            serde_yml::to_string(&ReviewGateOutcome::Mandatory)
+                .unwrap()
+                .trim(),
+            "mandatory"
+        );
+    }
+
+    #[test]
+    fn approval_record_round_trips_with_provenance() {
+        let now = Utc::now();
+        let record = ApprovalRecord {
+            approval_id: "approval-1".to_string(),
+            subject_ref: "unit:45.8".to_string(),
+            unit_id: "45.8".to_string(),
+            attempt: Some(1),
+            run_id: Some("run-1".to_string()),
+            candidate_ref: "candidate:run-1".to_string(),
+            evidence_bundle_ref: "evidence:run-1".to_string(),
+            decision: ApprovalDecision::Approved,
+            state: ApprovalState::Active,
+            decision_source: DecisionSource::PolicyEngine,
+            actor: Some("policy://default".to_string()),
+            approved_at: now,
+            gate_policy_ref: "policy:review-gate/v1".to_string(),
+            review_gate_outcome: ReviewGateOutcome::Optional,
+            risk_level: Some("normal".to_string()),
+            risk_flags: vec![RiskFlagRecord {
+                code: "scope_creep".to_string(),
+                message: "change touched one extra file".to_string(),
+                files: vec!["mana/crates/mana-core/src/unit/types.rs".to_string()],
+            }],
+            verify_refs: vec!["verify:run-1".to_string()],
+            diff_scope_ref: Some("close-evidence:run-1".to_string()),
+            review_refs: Vec::new(),
+            review_decision_refs: Vec::new(),
+            basis: "evidence complete; optional review not exercised".to_string(),
+            provenance: ApprovalProvenance {
+                unit_id: "45.8".to_string(),
+                attempt: Some(1),
+                run_id: Some("run-1".to_string()),
+                candidate_ref: "candidate:run-1".to_string(),
+                evidence_bundle_ref: "evidence:run-1".to_string(),
+                gate_policy_ref: "policy:review-gate/v1".to_string(),
+                review_gate_outcome: ReviewGateOutcome::Optional,
+                risk_level: Some("normal".to_string()),
+                risk_flags: vec![RiskFlagRecord {
+                    code: "scope_creep".to_string(),
+                    message: "change touched one extra file".to_string(),
+                    files: vec!["mana/crates/mana-core/src/unit/types.rs".to_string()],
+                }],
+                verify_refs: vec!["verify:run-1".to_string()],
+                diff_scope_ref: Some("close-evidence:run-1".to_string()),
+                review_refs: Vec::new(),
+                review_decision_refs: Vec::new(),
+                decision_source: DecisionSource::PolicyEngine,
+                actor: Some("policy://default".to_string()),
+                recorded_at: now,
+            },
+        };
+
+        record.validate().unwrap();
+
+        let yaml = serde_yml::to_string(&record).unwrap();
+        assert!(yaml.contains("evidence_bundle_ref: evidence:run-1"));
+        assert!(yaml.contains("review_gate_outcome: optional"));
+        assert!(yaml.contains("provenance:"));
+
+        let restored: ApprovalRecord = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(record, restored);
+    }
+
+    #[test]
+    fn approval_record_rejects_mandatory_review_without_lineage() {
+        let now = Utc::now();
+        let record = ApprovalRecord {
+            approval_id: "approval-2".to_string(),
+            subject_ref: "unit:45.8".to_string(),
+            unit_id: "45.8".to_string(),
+            attempt: Some(2),
+            run_id: Some("run-2".to_string()),
+            candidate_ref: "candidate:run-2".to_string(),
+            evidence_bundle_ref: "evidence:run-2".to_string(),
+            decision: ApprovalDecision::Withheld,
+            state: ApprovalState::Active,
+            decision_source: DecisionSource::Human,
+            actor: Some("asher".to_string()),
+            approved_at: now,
+            gate_policy_ref: "policy:review-gate/v1".to_string(),
+            review_gate_outcome: ReviewGateOutcome::Mandatory,
+            risk_level: Some("high".to_string()),
+            risk_flags: vec![RiskFlagRecord {
+                code: "large_diff".to_string(),
+                message: "diff exceeded mandatory-review threshold".to_string(),
+                files: Vec::new(),
+            }],
+            verify_refs: vec!["verify:run-2".to_string()],
+            diff_scope_ref: Some("close-evidence:run-2".to_string()),
+            review_refs: Vec::new(),
+            review_decision_refs: Vec::new(),
+            basis: "mandatory review still pending".to_string(),
+            provenance: ApprovalProvenance {
+                unit_id: "45.8".to_string(),
+                attempt: Some(2),
+                run_id: Some("run-2".to_string()),
+                candidate_ref: "candidate:run-2".to_string(),
+                evidence_bundle_ref: "evidence:run-2".to_string(),
+                gate_policy_ref: "policy:review-gate/v1".to_string(),
+                review_gate_outcome: ReviewGateOutcome::Mandatory,
+                risk_level: Some("high".to_string()),
+                risk_flags: vec![RiskFlagRecord {
+                    code: "large_diff".to_string(),
+                    message: "diff exceeded mandatory-review threshold".to_string(),
+                    files: Vec::new(),
+                }],
+                verify_refs: vec!["verify:run-2".to_string()],
+                diff_scope_ref: Some("close-evidence:run-2".to_string()),
+                review_refs: Vec::new(),
+                review_decision_refs: Vec::new(),
+                decision_source: DecisionSource::Human,
+                actor: Some("asher".to_string()),
+                recorded_at: now,
+            },
+        };
+
+        let error = record.validate().unwrap_err();
+        assert!(error.contains("mandatory review gate outcome requires non-empty review_refs"));
+    }
+
+    #[test]
+    fn approval_record_accepts_mandatory_review_with_lineage() {
+        let now = Utc::now();
+        let record = ApprovalRecord {
+            approval_id: "approval-3".to_string(),
+            subject_ref: "unit:45.8".to_string(),
+            unit_id: "45.8".to_string(),
+            attempt: Some(3),
+            run_id: Some("run-3".to_string()),
+            candidate_ref: "candidate:run-3".to_string(),
+            evidence_bundle_ref: "evidence:run-3".to_string(),
+            decision: ApprovalDecision::Approved,
+            state: ApprovalState::Active,
+            decision_source: DecisionSource::MixedWorkflow,
+            actor: Some("human+policy".to_string()),
+            approved_at: now,
+            gate_policy_ref: "policy:review-gate/v1".to_string(),
+            review_gate_outcome: ReviewGateOutcome::Mandatory,
+            risk_level: Some("high".to_string()),
+            risk_flags: vec![RiskFlagRecord {
+                code: "security_sensitive".to_string(),
+                message: "runtime-boundary file changed".to_string(),
+                files: vec!["mana/crates/mana-core/src/unit/types.rs".to_string()],
+            }],
+            verify_refs: vec!["verify:run-3".to_string()],
+            diff_scope_ref: Some("close-evidence:run-3".to_string()),
+            review_refs: vec!["review:run-3".to_string()],
+            review_decision_refs: vec!["review-decision:approved".to_string()],
+            basis: "mandatory skeptical review completed and evidence satisfied gate"
+                .to_string(),
+            provenance: ApprovalProvenance {
+                unit_id: "45.8".to_string(),
+                attempt: Some(3),
+                run_id: Some("run-3".to_string()),
+                candidate_ref: "candidate:run-3".to_string(),
+                evidence_bundle_ref: "evidence:run-3".to_string(),
+                gate_policy_ref: "policy:review-gate/v1".to_string(),
+                review_gate_outcome: ReviewGateOutcome::Mandatory,
+                risk_level: Some("high".to_string()),
+                risk_flags: vec![RiskFlagRecord {
+                    code: "security_sensitive".to_string(),
+                    message: "runtime-boundary file changed".to_string(),
+                    files: vec!["mana/crates/mana-core/src/unit/types.rs".to_string()],
+                }],
+                verify_refs: vec!["verify:run-3".to_string()],
+                diff_scope_ref: Some("close-evidence:run-3".to_string()),
+                review_refs: vec!["review:run-3".to_string()],
+                review_decision_refs: vec!["review-decision:approved".to_string()],
+                decision_source: DecisionSource::MixedWorkflow,
+                actor: Some("human+policy".to_string()),
+                recorded_at: now,
+            },
+        };
+
+        record.validate().unwrap();
+    }
+
+    #[test]
+    fn promotion_record_round_trips_with_approval_lineage() {
+        let now = Utc::now();
+        let record = PromotionRecord {
+            promotion_id: "promotion-1".to_string(),
+            subject_ref: "unit:45.8".to_string(),
+            unit_id: "45.8".to_string(),
+            approval_ref: "approval-3".to_string(),
+            evidence_bundle_ref: "evidence:run-3".to_string(),
+            review_refs: vec!["review:run-3".to_string()],
+            promotion_kind: PromotionKind::CloseUnit,
+            from_state: "awaiting_verify".to_string(),
+            to_state: "closed".to_string(),
+            effects: vec![PromotionEffect {
+                kind: "close_unit".to_string(),
+                target_ref: Some("unit:45.8".to_string()),
+                summary: Some("unit archived after approval-backed promotion".to_string()),
+            }],
+            promoted_at: now,
+            promotion_source: DecisionSource::PolicyEngine,
+            promoted_by: Some("policy://close".to_string()),
+            provenance: PromotionProvenance {
+                approval_ref: "approval-3".to_string(),
+                evidence_bundle_ref: "evidence:run-3".to_string(),
+                review_refs: vec!["review:run-3".to_string()],
+                candidate_ref: Some("candidate:run-3".to_string()),
+                promotion_source: DecisionSource::PolicyEngine,
+                promoted_by: Some("policy://close".to_string()),
+                promoted_at: now,
+            },
+        };
+
+        record.validate().unwrap();
+
+        let yaml = serde_yml::to_string(&record).unwrap();
+        assert!(yaml.contains("approval_ref: approval-3"));
+        assert!(yaml.contains("evidence_bundle_ref: evidence:run-3"));
+        assert!(yaml.contains("provenance:"));
+
+        let restored: PromotionRecord = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(record, restored);
     }
 }

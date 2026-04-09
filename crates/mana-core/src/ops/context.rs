@@ -618,6 +618,7 @@ mod tests {
             agent: Some("pi-agent".to_string()),
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         }];
 
         let result = format_attempt_notes(&unit).unwrap();
@@ -647,6 +648,7 @@ mod tests {
             agent: None,
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         }];
         assert!(format_attempt_notes(&unit).is_none());
     }
@@ -675,6 +677,7 @@ mod tests {
             agent: Some("imp".to_string()),
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         }];
         let child_slug = crate::util::title_to_slug(&child.title);
         child

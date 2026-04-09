@@ -55,8 +55,8 @@ use crate::error::{ManaError, ManaResult};
 
 /// Core unit type representing a single work item.
 pub use crate::unit::{
-    AttemptOutcome, AttemptRecord, OnCloseAction, OnFailAction, RunRecord, RunResult, Status, Unit,
-    UnitKind,
+    AttemptOutcome, AttemptRecord, AutonomyObservation, AutonomyProvenance, OnCloseAction,
+    OnFailAction, RunRecord, RunResult, Status, Unit, UnitKind, VisibilityState,
 };
 
 /// Index types for working with the unit cache.
@@ -972,6 +972,7 @@ pub fn assemble_context(mana_dir: &Path, id: &str) -> Result<AgentContext> {
 ///     agent: Some("imp-agent".to_string()),
 ///     started_at: Some(now),
 ///     finished_at: Some(now),
+///     autonomy_observation: None,
 /// };
 /// record_attempt(Path::new("/project/.mana"), "1", attempt).unwrap();
 /// ```

@@ -143,6 +143,7 @@ pub fn claim(mana_dir: &Path, id: &str, params: ClaimParams) -> Result<ClaimResu
         agent: resolved_by,
         started_at: Some(now),
         finished_at: None,
+        autonomy_observation: None,
     });
 
     unit.to_file(&unit_path)
