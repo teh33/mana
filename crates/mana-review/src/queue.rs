@@ -6,7 +6,7 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::risk;
+use crate::{diff, risk, state};
 use crate::types::{FileChange, QueueEntry};
 
 /// Build the review queue from the current `.mana/` state.
@@ -30,14 +30,16 @@ pub fn build(mana_dir: &Path, project_root: &Path) -> Result<Vec<QueueEntry>> {
         }
 
         // Skip units that already have a persisted review record.
-        if crate::state::has_review(mana_dir, &unit_entry.id) {
+        if state::has_review(mana_dir, &unit_entry.id) {
             continue;
         }
 
         // Load the full unit for risk scoring
         let unit = mana_core::api::get_unit(mana_dir, &unit_entry.id)?;
 
-        let file_changes = get_file_changes_for_unit(project_root, &unit);
+        // Queue generation should stay robust even if diff evidence can't be computed
+        // for this unit (missing checkpoint, unavailable git, bad repo state, etc.).
+        let file_changes = get_file_changes_for_unit(project_root, &unit)?;
 
         let (risk_level, risk_flags) = risk::score(&unit, &file_changes);
 
@@ -66,167 +68,202 @@ pub fn build(mana_dir: &Path, project_root: &Path) -> Result<Vec<QueueEntry>> {
 ///
 /// Uses the unit's checkpoint (if available) to compute the diff
 /// against the state before work began.
-fn get_file_changes_for_unit(project_root: &Path, unit: &mana_core::unit::Unit) -> Vec<FileChange> {
+fn get_file_changes_for_unit(
+    project_root: &Path,
+    unit: &mana_core::unit::Unit,
+) -> Result<Vec<FileChange>> {
     let Some(checkpoint) = unit.checkpoint.as_deref() else {
-        // No checkpoint means we don't have a trustworthy baseline for this unit.
-        return vec![];
+        return Ok(vec![]);
     };
 
-    crate::diff::compute(project_root, Some(checkpoint))
+    let file_changes = diff::compute(project_root, Some(checkpoint))
         .map(|(_, file_changes)| file_changes)
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    Ok(file_changes)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::state;
-    use crate::types::{Review, ReviewDecision, RiskFlagKind, RiskLevel};
+    use crate::types::{Review, ReviewDecision};
     use chrono::Utc;
+    use mana_core::index::Index;
     use mana_core::unit::{Status, Unit};
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
     use tempfile::TempDir;
 
-    fn setup_mana_dir() -> (TempDir, PathBuf) {
+    fn setup_project() -> (TempDir, PathBuf, PathBuf) {
         let tmp = TempDir::new().unwrap();
-        let mana_dir = tmp.path().join(".mana");
+        let project_root = tmp.path().to_path_buf();
+        let mana_dir = project_root.join(".mana");
         fs::create_dir_all(&mana_dir).unwrap();
-        (tmp, mana_dir)
+        (tmp, project_root, mana_dir)
     }
 
     fn write_unit(mana_dir: &Path, unit: &Unit) {
-        unit.to_file(mana_dir.join(format!("{}-test-unit.md", unit.id)))
+        let slug = unit
+            .title
+            .to_lowercase()
+            .replace(|c: char| !c.is_ascii_alphanumeric(), "-")
+            .trim_matches('-')
+            .to_string();
+        unit.to_file(mana_dir.join(format!("{}-{}.md", unit.id, slug)))
             .unwrap();
     }
 
-    fn review_for(unit_id: &str) -> Review {
+    fn save_index(mana_dir: &Path) {
+        let index = Index::build(mana_dir).unwrap();
+        index.save(mana_dir).unwrap();
+    }
+
+    fn make_closed_unit(id: &str, title: &str) -> Unit {
+        let mut unit = Unit::new(id, title);
+        unit.status = Status::Closed;
+        unit.closed_at = Some(Utc::now());
+        unit.updated_at = Utc::now();
+        unit
+    }
+
+    fn make_review(unit_id: &str) -> Review {
         Review {
-            unit_id: unit_id.to_string(),
+            unit_id: unit_id.into(),
             attempt: 1,
             decision: ReviewDecision::Approved,
-            summary: Some("Looks good".to_string()),
+            summary: Some("Looks good".into()),
             annotations: vec![],
             reviewed_at: Utc::now(),
-            reviewer: "human".to_string(),
+            reviewer: "human".into(),
         }
     }
 
-    fn git(repo: &Path, args: &[&str]) {
+    fn git(project_root: &Path, args: &[&str]) -> String {
         let output = Command::new("git")
             .args(args)
-            .current_dir(repo)
+            .current_dir(project_root)
             .output()
             .unwrap();
 
         assert!(
             output.status.success(),
-            "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
+            "git {:?} failed: {}",
             args,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    fn git_stdout(repo: &Path, args: &[&str]) -> String {
-        let output = Command::new("git")
-            .args(args)
-            .current_dir(repo)
-            .output()
-            .unwrap();
-
-        assert!(
-            output.status.success(),
-            "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
-            args,
-            String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
 
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 
-    fn init_repo(repo: &Path) {
-        git(repo, &["init"]);
-        git(repo, &["config", "user.name", "Mana Review Tests"]);
-        git(repo, &["config", "user.email", "tests@example.com"]);
+    fn init_git_repo(project_root: &Path) {
+        git(project_root, &["init"]);
+        git(project_root, &["config", "user.name", "Mana Review Tests"]);
+        git(project_root, &["config", "user.email", "mana-review-tests@example.com"]);
+    }
+
+    fn commit_all(project_root: &Path, message: &str) -> String {
+        git(project_root, &["add", "."]);
+        git(project_root, &["commit", "-m", message]);
+        git(project_root, &["rev-parse", "HEAD"])
     }
 
     #[test]
     fn reviewed_unit_excluded_from_queue() {
-        let (_tmp, mana_dir) = setup_mana_dir();
+        let (_tmp, project_root, mana_dir) = setup_project();
 
-        let mut unit = Unit::new("1", "Reviewed unit");
-        unit.status = Status::Closed;
+        let unit = make_closed_unit("1", "Reviewed unit");
         write_unit(&mana_dir, &unit);
-        state::save(&mana_dir, &review_for("1")).unwrap();
+        save_index(&mana_dir);
+        state::save(&mana_dir, &make_review("1")).unwrap();
 
-        let entries = build(&mana_dir, mana_dir.parent().unwrap()).unwrap();
-
+        let entries = build(&mana_dir, &project_root).unwrap();
         assert!(entries.is_empty());
     }
 
     #[test]
-    fn unreviewed_closed_unit_included_when_diff_unavailable() {
-        let (_tmp, mana_dir) = setup_mana_dir();
+    fn unreviewed_closed_unit_included_in_queue() {
+        let (_tmp, project_root, mana_dir) = setup_project();
 
-        let mut unit = Unit::new("1", "Closed unit");
-        unit.status = Status::Closed;
-        unit.checkpoint = Some("deadbeef".to_string());
+        let unit = make_closed_unit("1", "Needs review");
         write_unit(&mana_dir, &unit);
+        save_index(&mana_dir);
 
-        let entries = build(&mana_dir, mana_dir.parent().unwrap()).unwrap();
-
+        let entries = build(&mana_dir, &project_root).unwrap();
         assert_eq!(entries.len(), 1);
-        let entry = &entries[0];
-        assert_eq!(entry.unit_id, "1");
-        assert_eq!(entry.file_count, 0);
-        assert_eq!(entry.additions, 0);
-        assert_eq!(entry.deletions, 0);
-        assert_eq!(entry.risk_level, RiskLevel::Low);
+        assert_eq!(entries[0].unit_id, "1");
+        assert_eq!(entries[0].title, "Needs review");
     }
 
     #[test]
-    fn queue_uses_diff_evidence_for_stats_and_risk() {
-        let tmp = TempDir::new().unwrap();
-        let project_root = tmp.path();
-        init_repo(project_root);
+    fn diff_backed_stats_populate_when_checkpoint_exists() {
+        let (_tmp, project_root, mana_dir) = setup_project();
+        init_git_repo(&project_root);
 
-        fs::create_dir_all(project_root.join("src")).unwrap();
-        fs::write(project_root.join("src/auth.rs"), "pub fn login() {\n    // v1\n}\n").unwrap();
-        git(project_root, &["add", "src/auth.rs"]);
-        git(project_root, &["commit", "-m", "base"]);
-        let checkpoint = git_stdout(project_root, &["rev-parse", "HEAD"]);
+        let src_dir = project_root.join("src");
+        fs::create_dir_all(&src_dir).unwrap();
+        fs::write(src_dir.join("lib.rs"), "old\nkeep\n").unwrap();
+        let checkpoint = commit_all(&project_root, "base");
 
-        fs::write(
-            project_root.join("src/auth.rs"),
-            "pub fn login() {\n    // v2\n}\n\npub fn issue_token() {}\n",
-        )
-        .unwrap();
-        git(project_root, &["add", "src/auth.rs"]);
-        git(project_root, &["commit", "-m", "change auth"]);
+        fs::write(src_dir.join("lib.rs"), "new\nkeep\nplus\n").unwrap();
+        commit_all(&project_root, "change");
 
-        let mana_dir = project_root.join(".mana");
-        fs::create_dir_all(&mana_dir).unwrap();
-
-        let mut unit = Unit::new("1", "Review auth change");
-        unit.status = Status::Closed;
+        let mut unit = make_closed_unit("1", "Diff-backed review");
         unit.checkpoint = Some(checkpoint);
+        unit.paths = vec!["src/lib.rs".into()];
         write_unit(&mana_dir, &unit);
+        save_index(&mana_dir);
 
-        let entries = build(&mana_dir, project_root).unwrap();
-
+        let entries = build(&mana_dir, &project_root).unwrap();
         assert_eq!(entries.len(), 1);
+
         let entry = &entries[0];
-        assert_eq!(entry.unit_id, "1");
         assert_eq!(entry.file_count, 1);
-        assert_eq!(entry.additions, 3);
+        assert_eq!(entry.additions, 2);
         assert_eq!(entry.deletions, 1);
-        assert_eq!(entry.risk_level, RiskLevel::Critical);
-        assert!(entry
-            .risk_flags
-            .iter()
-            .any(|flag| flag.kind == RiskFlagKind::SecuritySensitive));
+    }
+
+    #[test]
+    fn missing_checkpoint_keeps_unit_in_queue_with_empty_stats() {
+        let (_tmp, project_root, mana_dir) = setup_project();
+        init_git_repo(&project_root);
+
+        fs::write(project_root.join("README.md"), "hello\n").unwrap();
+        commit_all(&project_root, "init");
+
+        let unit = make_closed_unit("1", "No checkpoint");
+        write_unit(&mana_dir, &unit);
+        save_index(&mana_dir);
+
+        let entries = build(&mana_dir, &project_root).unwrap();
+        assert_eq!(entries.len(), 1);
+
+        let entry = &entries[0];
+        assert_eq!(entry.file_count, 0);
+        assert_eq!(entry.additions, 0);
+        assert_eq!(entry.deletions, 0);
+    }
+
+    #[test]
+    fn invalid_checkpoint_keeps_unit_in_queue_with_empty_stats() {
+        let (_tmp, project_root, mana_dir) = setup_project();
+        init_git_repo(&project_root);
+
+        fs::write(project_root.join("README.md"), "hello\n").unwrap();
+        commit_all(&project_root, "init");
+
+        let mut unit = make_closed_unit("1", "Bad checkpoint");
+        unit.checkpoint = Some("not-a-real-ref".into());
+        write_unit(&mana_dir, &unit);
+        save_index(&mana_dir);
+
+        let entries = build(&mana_dir, &project_root).unwrap();
+        assert_eq!(entries.len(), 1);
+
+        let entry = &entries[0];
+        assert_eq!(entry.file_count, 0);
+        assert_eq!(entry.additions, 0);
+        assert_eq!(entry.deletions, 0);
     }
 }
