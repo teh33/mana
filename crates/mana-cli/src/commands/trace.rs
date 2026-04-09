@@ -390,6 +390,7 @@ mod tests {
             agent: None,
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         }];
         write_unit(mana_dir, &unit);
 
@@ -438,6 +439,7 @@ mod tests {
                 agent: None,
                 started_at: None,
                 finished_at: None,
+                autonomy_observation: None,
             },
             AttemptRecord {
                 num: 2,
@@ -446,6 +448,7 @@ mod tests {
                 agent: None,
                 started_at: None,
                 finished_at: None,
+                autonomy_observation: None,
             },
         ];
         write_unit(mana_dir, &main_unit);
@@ -478,6 +481,7 @@ mod tests {
             agent: None,
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         }];
         write_unit(mana_dir, &child);
 

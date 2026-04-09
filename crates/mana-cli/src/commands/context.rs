@@ -479,6 +479,7 @@ mod tests {
                 agent: Some("pi-agent".to_string()),
                 started_at: None,
                 finished_at: None,
+                autonomy_observation: None,
             },
             AttemptRecord {
                 num: 2,
@@ -487,6 +488,7 @@ mod tests {
                 agent: None,
                 started_at: None,
                 finished_at: None,
+                autonomy_observation: None,
             },
         ];
         unit
@@ -529,6 +531,7 @@ mod tests {
             agent: None,
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         }];
         let result = core_format_attempt_notes(&unit);
         assert!(result.is_none());
@@ -573,6 +576,7 @@ mod tests {
             agent: None,
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         }];
         let result = core_format_attempt_notes(&unit);
         assert!(

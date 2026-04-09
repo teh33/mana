@@ -385,6 +385,7 @@ mod tests {
             agent: Some("agent-1".to_string()),
             started_at: Some(Utc::now()),
             finished_at: None,
+            autonomy_observation: None,
         });
         unit.to_file(mana_dir.join("1.yaml")).unwrap();
 

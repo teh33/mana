@@ -441,6 +441,7 @@ mod tests {
             tokens: Some(1000),
             cost: Some(0.05),
             output_snippet: None,
+            autonomy_observation: None,
         }];
 
         let stats = aggregate_cost(&[unit]).unwrap();
@@ -467,6 +468,7 @@ mod tests {
             tokens: Some(tokens),
             cost: None,
             output_snippet: None,
+            autonomy_observation: None,
         };
 
         let mut cheap = Unit::new("1", "Cheap unit");

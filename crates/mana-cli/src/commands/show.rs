@@ -609,6 +609,7 @@ mod tests {
             tokens: Some(tokens),
             cost: Some(cost),
             output_snippet: None,
+            autonomy_observation: None,
         }
     }
 
@@ -733,6 +734,7 @@ mod tests {
             tokens: None,
             cost: None,
             output_snippet: None,
+            autonomy_observation: None,
         };
 
         let rendered = render_history(&[record], 10);

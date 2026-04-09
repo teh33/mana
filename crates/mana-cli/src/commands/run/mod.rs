@@ -1729,6 +1729,7 @@ mod tests {
             agent: None,
             started_at: None,
             finished_at: None,
+            autonomy_observation: None,
         });
         abandoned.to_file(mana_dir.join("3-abandoned.md")).unwrap();
 

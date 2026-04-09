@@ -2244,6 +2244,7 @@ fn test_close_failed_marks_attempt_as_failed() {
         agent: Some("agent-1".to_string()),
         started_at: Some(Utc::now()),
         finished_at: None,
+        autonomy_observation: None,
     });
     let slug = title_to_slug(&unit.title);
     unit.to_file(mana_dir.join(format!("1-{}.md", slug)))
@@ -2284,6 +2285,7 @@ fn test_close_failed_appends_to_notes() {
         agent: None,
         started_at: Some(Utc::now()),
         finished_at: None,
+        autonomy_observation: None,
     });
     let slug = title_to_slug(&unit.title);
     unit.to_file(mana_dir.join(format!("1-{}.md", slug)))
@@ -2314,6 +2316,7 @@ fn test_close_failed_without_reason() {
         agent: None,
         started_at: Some(Utc::now()),
         finished_at: None,
+        autonomy_observation: None,
     });
     let slug = title_to_slug(&unit.title);
     unit.to_file(mana_dir.join(format!("1-{}.md", slug)))
