@@ -77,6 +77,7 @@ pub(crate) fn record_failure(unit: &mut Unit, failure: &FailureRecord) {
         tokens: None,
         cost: None,
         output_snippet,
+        autonomy_observation: None,
     });
 }
 
