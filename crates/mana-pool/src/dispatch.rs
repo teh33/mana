@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{mpsc, Arc};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context, Result};
 use mana_core::util::natural_cmp;
@@ -244,7 +244,12 @@ fn sanitize_worktree_component(value: &str) -> String {
         .chars()
         .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
         .collect();
-    sanitized.trim_matches('-').to_string()
+    let trimmed = sanitized.trim_matches('-');
+    if trimmed.is_empty() {
+        "unit".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 fn unique_worktree_suffix() -> u128 {
@@ -270,9 +275,9 @@ fn create_worktree_for_unit(config: &PoolConfig, unit: &DispatchUnit) -> Result<
         .args([
             "worktree",
             "add",
-            &worktree_path.to_string_lossy(),
             "-b",
             &branch,
+            &worktree_path.to_string_lossy(),
         ])
         .output()
         .with_context(|| format!("Failed to run git worktree add for unit {}", unit.id))?;
@@ -436,13 +441,11 @@ fn run_dispatch_with_options(
     // Assign wave numbers for display
     let wave_map = compute_wave_map(units, completed_ids);
 
+    let project_root = project_root(&config.mana_dir)?.to_path_buf();
+
     let spawn_config = SpawnConfig {
         mana_dir: config.mana_dir.clone(),
-        repo_path: config
-            .mana_dir
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine project root from mana dir"))?
-            .to_path_buf(),
+        repo_path: project_root,
         timeout_minutes: config.timeout_minutes,
         idle_timeout_minutes: config.idle_timeout_minutes,
         run_model: config.run_model.clone(),
@@ -536,6 +539,10 @@ fn run_dispatch_with_options(
             let tx = result_tx.clone();
             let progress_tx_for_unit = progress_tx.clone();
             let cfg = SpawnConfig {
+                mana_dir: worktree
+                    .as_ref()
+                    .map(|wt| wt.worktree_path.join(".mana"))
+                    .unwrap_or_else(|| spawn_config.mana_dir.clone()),
                 repo_path: worktree
                     .as_ref()
                     .map(|wt| wt.worktree_path.clone())
@@ -650,11 +657,11 @@ fn run_dispatch_with_options(
                 result: result.clone(),
             });
             drain_progress_events(
-        &progress_rx,
-        event_tx,
-        &mut running_last_progress,
-        &mut running_stuck_emitted,
-    );
+                &progress_rx,
+                event_tx,
+                &mut running_last_progress,
+                &mut running_stuck_emitted,
+            );
 
             if success {
                 completed.insert(unit_id);
@@ -851,9 +858,12 @@ fn compute_wave_map(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::process::Command;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
+    use tempfile::TempDir;
 
     /// Test spawner that immediately succeeds.
     struct MockSpawner {
@@ -930,6 +940,41 @@ mod tests {
             run_model: None,
             mana_dir: std::path::PathBuf::from("/tmp/test-mana"),
         }
+    }
+
+    fn init_git_repo(path: &Path) {
+        let run = |args: &[&str]| {
+            let output = Command::new("git")
+                .args(args)
+                .current_dir(path)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {:?} failed: {}{}",
+                args,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+
+        run(&["init", "-b", "main"]);
+        run(&["config", "user.name", "Mana Pool Tests"]);
+        run(&["config", "user.email", "mana-pool-tests@example.com"]);
+        fs::create_dir_all(path.join(".mana")).unwrap();
+        fs::write(path.join("README.md"), "root\n").unwrap();
+        fs::write(path.join(".mana/config.yaml"), "project: test\nnext_id: 1\n").unwrap();
+        run(&["add", "."]);
+        run(&["commit", "-m", "init"]);
+    }
+
+    fn git_repo_pool_config() -> (TempDir, PoolConfig) {
+        let dir = TempDir::new().unwrap();
+        init_git_repo(dir.path());
+        let mut config = pool_config();
+        config.mana_dir = dir.path().join(".mana");
+        config.use_worktrees = true;
+        (dir, config)
     }
 
     #[test]
@@ -1893,6 +1938,179 @@ mod tests {
             })
             .collect();
         assert_eq!(spawn_order, vec!["1", "2"]);
+    }
+
+    #[test]
+    fn worktree_spawner_receives_worktree_path() {
+        struct AssertWorktreePath {
+            expected_root: PathBuf,
+        }
+
+        impl Spawner for AssertWorktreePath {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                assert_ne!(config.repo_path, self.expected_root);
+                assert!(config.repo_path.starts_with(self.expected_root.join(".mana/worktrees")));
+                assert_eq!(config.mana_dir, config.repo_path.join(".mana"));
+                assert!(config.repo_path.join(".git").exists());
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let (_dir, config) = git_repo_pool_config();
+        let expected_root = config.mana_dir.parent().unwrap().to_path_buf();
+        let (event_tx, _event_rx) = mpsc::channel();
+
+        let outcome = run_dispatch(
+            &config,
+            &[unit("1", &[])],
+            &HashSet::new(),
+            Arc::new(AssertWorktreePath { expected_root }),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+
+        assert_eq!(outcome.results.len(), 1);
+        assert!(outcome.results[0].success);
+    }
+
+    #[test]
+    fn worktree_cleanup_on_failure() {
+        struct FailInWorktree {
+            seen_repo: Arc<Mutex<Option<PathBuf>>>,
+        }
+
+        impl Spawner for FailInWorktree {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                *self.seen_repo.lock().unwrap() = Some(config.repo_path.clone());
+                fs::write(config.repo_path.join("failed.txt"), "boom\n").unwrap();
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: false,
+                    duration: Duration::from_millis(1),
+                    tokens: None,
+                    cost: None,
+                    error: Some("fail".into()),
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: Some("fail".into()),
+                }
+            }
+        }
+
+        let (_dir, config) = git_repo_pool_config();
+        let seen_repo = Arc::new(Mutex::new(None));
+        let (event_tx, _event_rx) = mpsc::channel();
+
+        let outcome = run_dispatch(
+            &config,
+            &[unit("1", &[])],
+            &HashSet::new(),
+            Arc::new(FailInWorktree {
+                seen_repo: seen_repo.clone(),
+            }),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+
+        assert!(outcome.any_failed);
+        let worktree_path = seen_repo.lock().unwrap().clone().unwrap();
+        assert!(!worktree_path.exists(), "failed worktree should be cleaned up");
+    }
+
+    #[test]
+    fn worktree_fallback_when_disabled() {
+        struct TrackPaths {
+            repos: Arc<Mutex<Vec<PathBuf>>>,
+            active: Arc<AtomicUsize>,
+            max_seen: Arc<AtomicUsize>,
+        }
+
+        impl Spawner for TrackPaths {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                self.repos.lock().unwrap().push(config.repo_path.clone());
+                let current = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+                self.max_seen.fetch_max(current, Ordering::SeqCst);
+                std::thread::sleep(Duration::from_millis(40));
+                self.active.fetch_sub(1, Ordering::SeqCst);
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(40),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let dir = TempDir::new().unwrap();
+        init_git_repo(dir.path());
+        let mut config = pool_config();
+        config.max_concurrent = 2;
+        config.mana_dir = dir.path().join(".mana");
+        config.use_worktrees = false;
+
+        let mut first = unit("1", &[]);
+        first.paths = vec!["shared.txt".into()];
+        let mut second = unit("2", &[]);
+        second.paths = vec!["shared.txt".into()];
+
+        let repos = Arc::new(Mutex::new(Vec::new()));
+        let active = Arc::new(AtomicUsize::new(0));
+        let max_seen = Arc::new(AtomicUsize::new(0));
+        let (event_tx, _event_rx) = mpsc::channel();
+
+        let outcome = run_dispatch(
+            &config,
+            &[first, second],
+            &HashSet::new(),
+            Arc::new(TrackPaths {
+                repos: repos.clone(),
+                active: active.clone(),
+                max_seen: max_seen.clone(),
+            }),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+
+        assert_eq!(outcome.results.len(), 2);
+        assert_eq!(max_seen.load(Ordering::SeqCst), 1);
+        let repo_root = dir.path().to_path_buf();
+        assert!(repos.lock().unwrap().iter().all(|path| *path == repo_root));
     }
 
     #[test]

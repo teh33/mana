@@ -180,9 +180,10 @@ pub trait Spawner: Send + Sync {
 /// Per-spawn configuration passed to the Spawner.
 #[derive(Debug, Clone)]
 pub struct SpawnConfig {
-    pub mana_dir: PathBuf,
-    /// Project or worktree directory where the agent should execute.
+    /// Repository/project root to run the agent in.
     pub repo_path: PathBuf,
+    /// Path to the .mana/ directory visible from the selected repo path.
+    pub mana_dir: PathBuf,
     pub timeout_minutes: u32,
     pub idle_timeout_minutes: u32,
     pub run_model: Option<String>,

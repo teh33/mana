@@ -10,3 +10,4 @@ license = "AGPL-3.0-or-later"
 mana-core = { path = "../mana-core" }
 anyhow = "1"
 sysinfo = "0.33"
+tempfile = "3"
