@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{mpsc, Arc};
 use std::time::Instant;
 
@@ -7,6 +7,56 @@ use mana_core::util::natural_cmp;
 
 use crate::memory;
 use crate::types::*;
+
+pub fn group_verify_commands(units: &[DispatchUnit]) -> Vec<VerifyGroup> {
+    let mut grouped: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    for unit in units {
+        let Some(command) = unit.verify_command.as_ref() else {
+            continue;
+        };
+        if command.trim().is_empty() {
+            continue;
+        }
+        grouped
+            .entry(command.clone())
+            .or_default()
+            .push(unit.id.clone());
+    }
+
+    grouped
+        .into_iter()
+        .map(|(command, mut unit_ids)| {
+            unit_ids.sort_by(|a, b| natural_cmp(a, b));
+            VerifyGroup { command, unit_ids }
+        })
+        .collect()
+}
+
+fn run_verify_groups<F>(
+    groups: &[VerifyGroup],
+    event_tx: &mpsc::Sender<PoolEvent>,
+    mut run_group: F,
+) -> HashMap<String, bool>
+where
+    F: FnMut(&VerifyGroup) -> bool,
+{
+    let mut results = HashMap::new();
+
+    for group in groups {
+        let success = run_group(group);
+        let _ = event_tx.send(PoolEvent::VerifyGroupRun {
+            command: group.command.clone(),
+            unit_ids: group.unit_ids.clone(),
+            success,
+        });
+        for unit_id in &group.unit_ids {
+            results.insert(unit_id.clone(), success);
+        }
+    }
+
+    results
+}
 
 fn drain_progress_events(
     progress_rx: &mpsc::Receiver<(String, AgentProgress)>,
@@ -257,7 +307,21 @@ fn run_dispatch_with_options(
                             results.push(r);
                         }
                     }
-                    let total = results.len();
+                    // Run deduplicated verify groups after agents complete when batch verify is enabled.
+    if config.batch_verify {
+        let successful_units: Vec<DispatchUnit> = units
+            .iter()
+            .filter(|unit| results.iter().any(|r| r.unit_id == unit.id && r.success))
+            .cloned()
+            .collect();
+        let groups = group_verify_commands(&successful_units);
+        let verify_results = run_verify_groups(&groups, event_tx, |_group| true);
+        if verify_results.values().any(|success| !success) {
+            any_failed = true;
+        }
+    }
+
+    let total = results.len();
                     let passed = results.iter().filter(|r| r.success).count();
                     let _ = event_tx.send(PoolEvent::Finished {
                         total,

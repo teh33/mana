@@ -52,8 +52,17 @@ pub struct DispatchUnit {
     pub requires: Vec<String>,
     /// File paths this unit touches — used for conflict detection.
     pub paths: Vec<String>,
+    /// Deferred verify command to run after agent completion when batch verify is enabled.
+    pub verify_command: Option<String>,
     /// Retry context derived from the unit's attempt history.
     pub retry: RetryContext,
+}
+
+/// A deduplicated verify command shared by one or more units.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyGroup {
+    pub command: String,
+    pub unit_ids: Vec<String>,
 }
 
 /// Result of a single agent's execution.
@@ -102,6 +111,13 @@ pub enum PoolEvent {
 
     /// An agent completed (success or failure).
     Completed { result: AgentResult },
+
+    /// A deduplicated verify command was run for one or more units.
+    VerifyGroupRun {
+        command: String,
+        unit_ids: Vec<String>,
+        success: bool,
+    },
 
     /// Dispatch is paused due to memory pressure.
     MemoryPressure {
