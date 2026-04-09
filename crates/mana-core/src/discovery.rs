@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-/// Walk up from `start` looking for a `.mana/` directory.
+/// Walk up from `start` looking for the nearest `.mana/` directory.
 /// Returns the path to the `.mana/` directory if found.
 /// Errors if no `.mana/` directory exists in any ancestor.
 pub fn find_mana_dir(start: &Path) -> Result<PathBuf> {
@@ -21,6 +21,25 @@ pub fn find_mana_dir(start: &Path) -> Result<PathBuf> {
     bail!("No .mana/ directory found. Run `mana init` first.");
 }
 
+/// Walk up from `start` looking for the outermost `.mana/` directory.
+/// This is useful for distinguishing a nested project `.mana/` from an
+/// ecosystem/root `.mana/` when both exist.
+pub fn find_outermost_mana_dir(start: &Path) -> Result<PathBuf> {
+    if let Some(found) = find_outermost_mana_dir_in_ancestors(start) {
+        return Ok(found);
+    }
+
+    if let Ok(canonical_start) = start.canonicalize() {
+        if canonical_start != start {
+            if let Some(found) = find_outermost_mana_dir_in_ancestors(&canonical_start) {
+                return Ok(found);
+            }
+        }
+    }
+
+    bail!("No .mana/ directory found. Run `mana init` first.");
+}
+
 fn find_mana_dir_in_ancestors(start: &Path) -> Option<PathBuf> {
     let mut current = start.to_path_buf();
     loop {
@@ -30,6 +49,20 @@ fn find_mana_dir_in_ancestors(start: &Path) -> Option<PathBuf> {
         }
         if !current.pop() {
             return None;
+        }
+    }
+}
+
+fn find_outermost_mana_dir_in_ancestors(start: &Path) -> Option<PathBuf> {
+    let mut current = start.to_path_buf();
+    let mut found = None;
+    loop {
+        let candidate = current.join(".mana");
+        if candidate.is_dir() {
+            found = Some(candidate);
+        }
+        if !current.pop() {
+            return found;
         }
     }
 }
@@ -274,6 +307,18 @@ mod tests {
 
         let result = find_mana_dir(&child).unwrap();
         assert_eq!(result, child.join(".mana"));
+    }
+
+    #[test]
+    fn find_outermost_prefers_highest_ancestor_mana_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join(".mana")).unwrap();
+        let child = dir.path().join("subproject");
+        fs::create_dir(&child).unwrap();
+        fs::create_dir(child.join(".mana")).unwrap();
+
+        let result = find_outermost_mana_dir(&child).unwrap();
+        assert_eq!(result, dir.path().join(".mana"));
     }
 
     // =====================================================================

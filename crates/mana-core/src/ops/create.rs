@@ -10,6 +10,43 @@ use crate::unit::{validate_priority, OnFailAction, Unit, UnitKind};
 use crate::util::title_to_slug;
 use crate::verify_lint::{lint_verify, VerifyLintLevel};
 
+fn next_top_level_id(mana_dir: &Path, config: &mut Config) -> Result<u32> {
+    let dir_entries = fs::read_dir(mana_dir)
+        .with_context(|| format!("Failed to read directory: {}", mana_dir.display()))?;
+    let mut max_existing = 0u32;
+
+    for entry in dir_entries {
+        let entry = entry?;
+        let filename = entry
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .to_string();
+
+        let base = filename
+            .strip_suffix(".md")
+            .or_else(|| filename.strip_suffix(".yaml"));
+        let Some(base) = base else {
+            continue;
+        };
+
+        let Some(first_segment) = base.split(['-', '.']).next() else {
+            continue;
+        };
+
+        if let Ok(id) = first_segment.parse::<u32>() {
+            max_existing = max_existing.max(id);
+        }
+    }
+
+    if config.next_id <= max_existing {
+        config.next_id = max_existing + 1;
+    }
+
+    Ok(config.increment_id())
+}
+
 /// Parameters for creating a new unit.
 #[derive(Default)]
 pub struct CreateParams {
@@ -79,9 +116,7 @@ pub fn create(mana_dir: &Path, params: CreateParams) -> Result<CreateResult> {
     let unit_id = if let Some(ref parent_id) = params.parent {
         assign_child_id(mana_dir, parent_id)?
     } else {
-        let id = config.increment_id();
-        config.save(mana_dir)?;
-        id.to_string()
+        next_top_level_id(mana_dir, &mut config)?.to_string()
     };
 
     let slug = title_to_slug(&params.title);
@@ -313,10 +348,23 @@ pub mod tests {
     }
 
     #[test]
-    fn create_rebuilds_index() {
+    fn create_recovers_from_stale_next_id() {
         let (_dir, bd) = setup_mana_dir();
-        create(&bd, minimal_params("Indexed")).unwrap();
-        let index = Index::load(&bd).unwrap();
-        assert_eq!(index.units[0].title, "Indexed");
+
+        let mut existing = Unit::new("5", "Existing");
+        existing.slug = Some("existing".into());
+        existing
+            .to_file(bd.join("5-existing.md"))
+            .unwrap();
+
+        let mut config = Config::load(&bd).unwrap();
+        config.next_id = 3;
+        config.save(&bd).unwrap();
+
+        let created = create(&bd, minimal_params("After stale next_id")).unwrap();
+        assert_eq!(created.unit.id, "6");
+
+        let config = Config::load(&bd).unwrap();
+        assert_eq!(config.next_id, 7);
     }
 }
