@@ -179,6 +179,7 @@ pub use crate::ops::{
 pub use crate::ops::context::AgentContext;
 pub use crate::ops::context::summarize_child_units as compare_sibling_jobs;
 pub use crate::ops::fact::{FactParams, FactResult, VerifyFactsResult};
+pub use crate::ops::memory_context::{MemoryContext, RecentWork, RelevantFact, WorkingUnit, memory_context};
 pub use crate::ops::run::{BlockedUnit, ReadyQueue, ReadyUnit, RunPlan, RunWave};
 pub use crate::ops::stats::StatsResult;
 pub use crate::ops::status::StatusSummary;
