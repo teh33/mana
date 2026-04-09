@@ -668,6 +668,66 @@ mod tests {
     }
 
     #[test]
+    fn budget_enforces_max_concurrent_limit() {
+        struct TrackConcurrency {
+            in_flight: Arc<AtomicUsize>,
+            max_seen: Arc<AtomicUsize>,
+        }
+
+        impl Spawner for TrackConcurrency {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                let now_running = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                self.max_seen.fetch_max(now_running, Ordering::SeqCst);
+                std::thread::sleep(Duration::from_millis(40));
+                self.in_flight.fetch_sub(1, Ordering::SeqCst);
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: true,
+                    duration: Duration::from_millis(40),
+                    tokens: None,
+                    cost: None,
+                    error: None,
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let mut config = pool_config();
+        config.max_concurrent = 1;
+
+        let units = vec![unit("1", &[]), unit("2", &[]), unit("3", &[])];
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let max_seen = Arc::new(AtomicUsize::new(0));
+        let spawner = TrackConcurrency {
+            in_flight: in_flight.clone(),
+            max_seen: max_seen.clone(),
+        };
+        let (event_tx, _) = mpsc::channel();
+
+        let outcome = run_dispatch(
+            &config,
+            &units,
+            &HashSet::new(),
+            Arc::new(spawner),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+
+        assert_eq!(outcome.results.len(), 3);
+        assert_eq!(in_flight.load(Ordering::SeqCst), 0);
+        assert_eq!(max_seen.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
     fn spawner_receives_attempt_count() {
         struct AssertRetry;
         impl Spawner for AssertRetry {
@@ -1010,6 +1070,70 @@ mod tests {
         assert!(outcome.any_failed);
         // Should stop after 2 (first succeeds, second fails, third never runs)
         assert_eq!(outcome.results.len(), 2);
+    }
+
+    #[test]
+    fn budget_circuit_breaker_stops_new_spawns_after_failure() {
+        struct FailSecondBudget(AtomicUsize);
+        impl Spawner for FailSecondBudget {
+            fn spawn(
+                &self,
+                unit: &DispatchUnit,
+                _config: &SpawnConfig,
+                _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
+            ) -> AgentResult {
+                let n = self.0.fetch_add(1, Ordering::SeqCst);
+                AgentResult {
+                    unit_id: unit.id.clone(),
+                    title: unit.title.clone(),
+                    success: n != 1,
+                    duration: Duration::from_millis(5),
+                    tokens: None,
+                    cost: None,
+                    error: if n == 1 {
+                        Some("test failure".into())
+                    } else {
+                        None
+                    },
+                    tool_count: 0,
+                    turns: 0,
+                    failure_summary: None,
+                }
+            }
+        }
+
+        let mut config = pool_config();
+        config.max_concurrent = 1;
+
+        let units = vec![unit("1", &[]), unit("2", &[]), unit("3", &[])];
+        let spawner = FailSecondBudget(AtomicUsize::new(0));
+        let (event_tx, event_rx) = mpsc::channel();
+
+        let outcome = run_dispatch(
+            &config,
+            &units,
+            &HashSet::new(),
+            Arc::new(spawner),
+            &event_tx,
+            &|| false,
+        )
+        .unwrap();
+
+        assert!(outcome.any_failed);
+        assert_eq!(outcome.results.len(), 2);
+
+        let events: Vec<PoolEvent> = event_rx.try_iter().collect();
+        let spawn_order: Vec<String> = events
+            .iter()
+            .filter_map(|e| {
+                if let PoolEvent::Spawning { unit_id, .. } = e {
+                    Some(unit_id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(spawn_order, vec!["1", "2"]);
     }
 
     #[test]

@@ -14,7 +14,7 @@ Plain Markdown files in `.mana/`. Any agent that can read files and run shell co
 ```bash
 mana init --agent claude
 mana create "Add CSV export" --verify "cargo test csv::export"
-mana run
+imp run <unit-id>
 ```
 
 ## Contents
@@ -67,7 +67,7 @@ It has:
 - a verify command
 - optional description, acceptance criteria, paths, labels, and notes
 
-Jobs are what `mana run` dispatches to agents.
+Jobs are what `imp run <unit-id>` should execute against the mana substrate. `mana run` is legacy/compatibility behavior on the path to disappearing.
 
 ### Epic
 An **epic** is a parent/grouping record for larger work.
@@ -154,13 +154,13 @@ Create another job:
 mana create "Add pagination" --verify "cargo test page"
 ```
 
-Dispatch ready work to your agent:
+Run a job with imp:
 
 ```bash
-mana run
+imp run <unit-id>
 ```
 
-Watch what happens:
+Inspect mana state around it:
 
 ```bash
 mana agents
@@ -223,29 +223,30 @@ In the happy path, mana also serves as the durable handoff point:
 
 ## Working with agents
 
-Configure an agent once, then dispatch ready jobs to it:
+Configure an agent/runtime once, then execute mana-shaped work through imp:
 
 ```bash
 mana init --agent claude
 ```
 
-Or set the run template directly:
+Or set the runtime command template directly:
 
 ```bash
-mana config set run "claude -p 'read unit {id}, implement it, then run mana close {id}'"
+mana config set run "imp run {id}"
 ```
 
 `{id}` is replaced with the unit ID.
 
-### Dispatching
+`mana run` still exists in the current repo as legacy/compatibility behavior, but the intended long-term boundary is `imp run {id}`: imp reads mana state and performs the task.
+
+### Legacy orchestration compatibility
+
+The current repo still has `mana run` and related config/model settings.
+Treat that as compatibility behavior during migration, not as the intended long-term architecture.
+The preferred execution framing is:
 
 ```bash
-mana run                    # Dispatch all ready units
-mana run 3                  # Dispatch a specific unit
-mana run -j 8               # Up to 8 parallel agents
-mana run --loop-mode        # Keep dispatching until work is done
-mana run --review           # Adversarial review after each close
-mana run --dry-run          # Preview dispatch plan
+imp run <unit-id>
 ```
 
 ### Batch verify
@@ -403,12 +404,12 @@ mana reopen <id>
 mana unarchive <id>
 ```
 
-### Orchestration
+### Orchestration (legacy compatibility during migration)
 
 ```bash
-mana run [id] [-j N]
-mana run --loop-mode
-mana run --review
+mana run [id] [-j N]        # legacy/compatibility behavior
+mana run --loop-mode        # legacy/compatibility behavior
+mana run --review           # legacy/compatibility behavior
 mana plan <id>
 mana review <id>
 mana agents
@@ -492,16 +493,16 @@ Model settings let you pick different defaults for different kinds of agent work
 - `mana doctor` now includes those config checks alongside graph/index health
 - `mana doctor fix` applies safe, deterministic fixes like index rebuilds
 
-- `run_model` powers `mana run`
+- `run_model` currently powers legacy `mana run` behavior during migration
 - `plan_model` powers `mana plan`
 - `review_model` powers AI review flows
 - `research_model` powers project-level research/planning
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `run` | — | Command template for agent dispatch. `{id}` = unit ID. |
+| `run` | — | Command template for agent/runtime execution. `{id}` = unit ID. Prefer `imp run {id}`. |
 | `plan` | — | Command template to split large units. |
-| `run_model` | — | Default model for `mana run`. |
+| `run_model` | — | Default model for legacy `mana run` behavior during migration. |
 | `plan_model` | — | Default model for `mana plan`. |
 | `review_model` | — | Default model for AI review flows. |
 | `research_model` | — | Default model for project-level research/planning. |
