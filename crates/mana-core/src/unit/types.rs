@@ -62,7 +62,19 @@ pub enum AutonomyBlockerCode {
     PolicyUnknown,
 }
 
-/// Current review / approval posture for autonomy gating.
+/// Current approval posture for autonomy gating.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalState {
+    Unknown,
+    NotRequired,
+    Required,
+    Pending,
+    Approved,
+    Rejected,
+}
+
+/// Current review posture for autonomy gating.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewState {
@@ -82,10 +94,12 @@ pub enum VerifyPosture {
     NotApplicable,
     Absent,
     Deferred,
-    Passing,
+    #[serde(alias = "passing")]
+    Satisfied,
     Failed,
     FrozenViolation,
-    QualityUnknown,
+    #[serde(alias = "quality_unknown")]
+    Weak,
 }
 
 /// Whether the unit has enough durable visibility/context for autonomous work.
@@ -137,6 +151,7 @@ pub struct AutonomyDisposition {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blockers: Vec<AutonomyBlockerCode>,
     pub review: ReviewState,
+    pub approval: ApprovalState,
     pub verify: VerifyPosture,
     pub visibility: VisibilityState,
     pub attempt_pressure: AttemptPressure,
@@ -170,6 +185,7 @@ impl Default for AutonomyDisposition {
             kind: AutonomyDispositionKind::Unknown,
             blockers: Vec::new(),
             review: ReviewState::Unknown,
+            approval: ApprovalState::Unknown,
             verify: VerifyPosture::Unknown,
             visibility: VisibilityState::Unknown,
             attempt_pressure: AttemptPressure::Unknown,
@@ -443,7 +459,7 @@ impl std::fmt::Display for ApprovalDecision {
 /// Lifecycle state of the durable approval record itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ApprovalState {
+pub enum ApprovalRecordState {
     Active,
     Superseded,
 }
@@ -543,7 +559,7 @@ pub struct ApprovalRecord {
     /// Approval-layer outcome.
     pub decision: ApprovalDecision,
     /// Lifecycle state of this approval record.
-    pub state: ApprovalState,
+    pub state: ApprovalRecordState,
     /// Who or what made the decision.
     pub decision_source: DecisionSource,
     /// Concrete actor identity when known.
@@ -789,6 +805,7 @@ mod tests {
                 AutonomyBlockerCode::ReviewPending,
             ],
             review: ReviewState::Pending,
+            approval: ApprovalState::Pending,
             verify: VerifyPosture::Deferred,
             visibility: VisibilityState::Satisfied,
             attempt_pressure: AttemptPressure::NearLimit,
@@ -812,6 +829,7 @@ mod tests {
             kind: AutonomyDispositionKind::Unknown,
             blockers: Vec::new(),
             review: ReviewState::Unknown,
+            approval: ApprovalState::Unknown,
             verify: VerifyPosture::Unknown,
             visibility: VisibilityState::Unknown,
             attempt_pressure: AttemptPressure::Unknown,
@@ -1137,7 +1155,7 @@ mod tests {
             candidate_ref: "candidate:run-1".to_string(),
             evidence_bundle_ref: "evidence:run-1".to_string(),
             decision: ApprovalDecision::Approved,
-            state: ApprovalState::Active,
+            state: ApprovalRecordState::Active,
             decision_source: DecisionSource::PolicyEngine,
             actor: Some("policy://default".to_string()),
             approved_at: now,
@@ -1201,7 +1219,7 @@ mod tests {
             candidate_ref: "candidate:run-2".to_string(),
             evidence_bundle_ref: "evidence:run-2".to_string(),
             decision: ApprovalDecision::Withheld,
-            state: ApprovalState::Active,
+            state: ApprovalRecordState::Active,
             decision_source: DecisionSource::Human,
             actor: Some("asher".to_string()),
             approved_at: now,
@@ -1258,7 +1276,7 @@ mod tests {
             candidate_ref: "candidate:run-3".to_string(),
             evidence_bundle_ref: "evidence:run-3".to_string(),
             decision: ApprovalDecision::Approved,
-            state: ApprovalState::Active,
+            state: ApprovalRecordState::Active,
             decision_source: DecisionSource::MixedWorkflow,
             actor: Some("human+policy".to_string()),
             approved_at: now,
