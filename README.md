@@ -46,6 +46,9 @@ Mana gives that work a durable shape.
 
 A unit says **what to do**. A verify gate says **how to know it's done**. Dependencies say **what it relies on**. Attempts, notes, and facts record **what was learned**.
 
+Mana is the cross-agent durable substrate and work medium for this work.
+It is where work becomes durable enough for another worker to inherit cold.
+
 Agents come and go. Mana keeps the work legible.
 
 ## The core model
@@ -101,6 +104,7 @@ Mana keeps context with the work itself:
 - verified facts
 - related files
 - dependency context
+- rich durable results and handoff context when they are cheap to capture and useful for the next worker
 
 ### Medium
 Everything lives in `.mana/` as plain files.
@@ -209,6 +213,13 @@ When you run `mana close 1` on a job:
 That simple loop is the foundation:
 
 **define → attempt → verify → learn → retry or close**
+
+In the happy path, mana also serves as the durable handoff point:
+1. work is expressed durably in mana
+2. a worker like imp picks up the unit with relevant prior state
+3. the worker executes live work
+4. the worker writes a rich durable result back into mana
+5. future workers inherit selectively from mana rather than replaying full session logs
 
 ## Working with agents
 
