@@ -2,12 +2,13 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::blocking::{check_blocked_with_archive, check_scope_warning, BlockReason, ScopeWarning};
+use crate::blocking::{check_blocked_with_archive, check_scope_warning, ScopeWarning};
 use crate::config::Config;
 use crate::index::{ArchiveIndex, Index, IndexEntry};
 use crate::stream::{self, StreamEvent};
-use crate::unit::{AttemptOutcome, Status};
+use crate::unit::{AttemptOutcome, AutonomyBlockerCode, Status};
 
+use mana_core::ops::run::blocked_unit_for_unresolved_decisions;
 use mana_pool::RetryContext;
 
 use super::ready_queue::all_deps_closed;
@@ -39,12 +40,14 @@ pub struct SizedUnit {
     pub model: Option<String>,
 }
 
-/// A unit that was excluded from dispatch due to scope issues.
+/// A unit that was excluded from dispatch due to scope issues or autonomy blockers.
 #[derive(Debug, Clone)]
 pub struct BlockedUnit {
     pub id: String,
     pub title: String,
-    pub reason: BlockReason,
+    pub reason: String,
+    pub blocker: Option<AutonomyBlockerCode>,
+    pub decisions: Vec<String>,
 }
 
 /// Result from planning dispatch.
@@ -112,9 +115,23 @@ fn matches_target(index: &Index, entry: &IndexEntry, target: &RunTarget) -> bool
 /// Plan dispatch: get ready units, filter by scope, compute waves.
 pub(super) fn plan_dispatch(
     mana_dir: &Path,
+    config: &Config,
+    target: &RunTarget,
+    simulate: bool,
+) -> Result<DispatchPlan> {
+    plan_dispatch_with_decision_override(mana_dir, config, target, simulate, false)
+}
+
+/// Like [`plan_dispatch`], but optionally allows units blocked only by
+/// unresolved durable decisions back into the dispatch set after operator
+/// confirmation. The canonical planner-visible state still reports them as
+/// blocked unless this explicit override is requested.
+pub(super) fn plan_dispatch_with_decision_override(
+    mana_dir: &Path,
     _config: &Config,
     target: &RunTarget,
     simulate: bool,
+    allow_unresolved_decisions: bool,
 ) -> Result<DispatchPlan> {
     let index = Index::load_or_rebuild(mana_dir)?;
     let archive = ArchiveIndex::load_or_rebuild(mana_dir)
@@ -153,12 +170,33 @@ pub(super) fn plan_dispatch(
     let mut warnings: Vec<(String, ScopeWarning)> = Vec::new();
 
     for entry in &candidate_entries {
+        let unit_path = crate::discovery::find_unit_file(mana_dir, &entry.id)?;
+        let unit = crate::unit::Unit::from_file(&unit_path)?;
+
         if !simulate {
+            if let Some(blocked) = blocked_unit_for_unresolved_decisions(entry, &unit) {
+                if allow_unresolved_decisions {
+                    // Keep the canonical blocker in the default planner state,
+                    // but let the CLI explicitly override it after confirmation.
+                } else {
+                    skipped.push(BlockedUnit {
+                        id: blocked.id,
+                        title: blocked.title,
+                        reason: blocked.reason,
+                        blocker: blocked.blocker,
+                        decisions: blocked.decisions,
+                    });
+                    continue;
+                }
+            }
+
             if let Some(reason) = check_blocked_with_archive(entry, &index, Some(&archive)) {
                 skipped.push(BlockedUnit {
                     id: entry.id.clone(),
                     title: entry.title.clone(),
-                    reason,
+                    reason: reason.to_string(),
+                    blocker: None,
+                    decisions: Vec::new(),
                 });
                 continue;
             }
@@ -167,8 +205,6 @@ pub(super) fn plan_dispatch(
         if let Some(warning) = check_scope_warning(entry) {
             warnings.push((entry.id.clone(), warning));
         }
-        let unit_path = crate::discovery::find_unit_file(mana_dir, &entry.id)?;
-        let unit = crate::unit::Unit::from_file(&unit_path)?;
 
         let retry = RetryContext {
             attempt_number: unit.attempts,
@@ -304,9 +340,18 @@ pub(super) fn print_plan(plan: &DispatchPlan, config_run_model: Option<&str>) {
 
     if !plan.skipped.is_empty() {
         println!();
-        println!("Blocked ({}):", plan.skipped.len());
+        println!("Blocked ({})", plan.skipped.len());
         for bb in &plan.skipped {
-            println!("  ⚠ {}  {}  ({})", bb.id, bb.title, bb.reason);
+            if bb.blocker == Some(AutonomyBlockerCode::UnresolvedDecision) {
+                println!(
+                    "  ⚠ {}  {}  (unresolved_decision: {} unresolved)",
+                    bb.id,
+                    bb.title,
+                    bb.decisions.len()
+                );
+            } else {
+                println!("  ⚠ {}  {}  ({})", bb.id, bb.title, bb.reason);
+            }
         }
     }
 }

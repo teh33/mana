@@ -28,10 +28,11 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use mana_core::unit::AutonomyBlockerCode;
 use mana_pool::{DispatchUnit, PoolConfig, PoolEvent};
 use serde::Serialize;
 
@@ -41,7 +42,7 @@ use crate::index::ArchiveIndex;
 use crate::stream::{self, StreamEvent};
 use crate::unit::{AttemptOutcome, Status, Unit};
 
-use plan::{plan_dispatch, print_plan, print_plan_json};
+use plan::{plan_dispatch, plan_dispatch_with_decision_override, print_plan, print_plan_json};
 use ready_queue::run_ready_queue_direct;
 use wave::run_wave;
 
@@ -485,37 +486,18 @@ struct DecisionWarning {
     decisions: Vec<String>,
 }
 
-fn collect_decision_warnings(
-    mana_dir: &Path,
-    units: &[SizedUnit],
-    index: &crate::index::Index,
-) -> Result<Vec<DecisionWarning>> {
-    let mut warnings = Vec::new();
-
-    for unit in units {
-        let Some(entry) = index.units.iter().find(|entry| entry.id == unit.id) else {
-            continue;
-        };
-
-        if !entry.has_decisions {
-            continue;
-        }
-
-        let unit_path = crate::discovery::find_unit_file(mana_dir, &unit.id)?;
-        let unit = Unit::from_file(&unit_path)?;
-        if unit.decisions.is_empty() {
-            continue;
-        }
-
-        warnings.push(DecisionWarning {
-            id: unit.id,
-            title: unit.title,
-            decisions: unit.decisions,
-        });
-    }
-
+fn collect_decision_warnings_from_skipped_units(blocked: &[plan::BlockedUnit]) -> Vec<DecisionWarning> {
+    let mut warnings: Vec<DecisionWarning> = blocked
+        .iter()
+        .filter(|blocked| blocked.blocker == Some(AutonomyBlockerCode::UnresolvedDecision))
+        .map(|blocked| DecisionWarning {
+            id: blocked.id.clone(),
+            title: blocked.title.clone(),
+            decisions: blocked.decisions.clone(),
+        })
+        .collect();
     warnings.sort_by(|a, b| crate::util::natural_cmp(&a.id, &b.id));
-    Ok(warnings)
+    warnings
 }
 
 fn format_decision_warning_message(warnings: &[DecisionWarning]) -> String {
@@ -702,7 +684,8 @@ fn run_once(
         return Ok(());
     }
 
-    let plan = plan_dispatch(mana_dir, config, &params.target, params.dry_run)?;
+    let mut plan = plan_dispatch(mana_dir, config, &params.target, params.dry_run)?;
+    let decision_warnings = collect_decision_warnings_from_skipped_units(&plan.skipped);
 
     if plan.waves.is_empty() && plan.skipped.is_empty() {
         if params.json_stream {
@@ -740,12 +723,15 @@ fn run_once(
         return Ok(());
     }
 
-    let decision_warnings = collect_decision_warnings(mana_dir, &plan.all_units, &plan.index)?;
     if !confirm_dispatch_with_decisions(&decision_warnings, params.json_stream)? {
         if !params.json_stream {
             eprintln!("Dispatch cancelled.");
         }
         return Ok(());
+    }
+
+    if !decision_warnings.is_empty() && !params.dry_run {
+        plan = plan_dispatch_with_decision_override(mana_dir, config, &params.target, false, true)?;
     }
 
     // Report blocked units (oversized/unscoped)
@@ -1612,65 +1598,54 @@ mod tests {
     }
 
     #[test]
-    fn collect_decision_warnings_only_returns_dispatch_units_with_decisions() {
-        let (_dir, mana_dir) = make_mana_dir();
-        write_config(&mana_dir, Some("echo {id}"));
-
-        let mut unit1 = crate::unit::Unit::new("1", "Has decisions");
-        unit1.verify = Some("echo ok".to_string());
-        unit1.decisions = vec!["JWT or session cookies?".to_string()];
-        unit1.to_file(mana_dir.join("1-has-decisions.md")).unwrap();
-
-        let mut unit2 = crate::unit::Unit::new("2", "No decisions");
-        unit2.verify = Some("echo ok".to_string());
-        unit2.to_file(mana_dir.join("2-no-decisions.md")).unwrap();
-
-        let index = crate::index::Index::build(&mana_dir).unwrap();
-        let units = vec![
-            SizedUnit {
+    fn collect_decision_warnings_from_skipped_units_only_returns_unresolved_decisions() {
+        let skipped = vec![
+            plan::BlockedUnit {
                 id: "1".to_string(),
                 title: "Has decisions".to_string(),
-                action: UnitAction::Implement,
-                priority: 2,
-                dependencies: Vec::new(),
-                parent: None,
-                produces: Vec::new(),
-                requires: Vec::new(),
-                paths: Vec::new(),
-                verify_fast: None,
-                verify_command: None,
-                retry: mana_pool::RetryContext {
-                    attempt_number: 0,
-                    previous_failure: None,
-                    previous_notes: vec![],
-                },
-                model: None,
+                reason: "unresolved_decision".to_string(),
+                blocker: Some(AutonomyBlockerCode::UnresolvedDecision),
+                decisions: vec!["JWT or session cookies?".to_string()],
             },
-            SizedUnit {
+            plan::BlockedUnit {
                 id: "2".to_string(),
-                title: "No decisions".to_string(),
-                action: UnitAction::Implement,
-                priority: 2,
-                dependencies: Vec::new(),
-                parent: None,
-                produces: Vec::new(),
-                requires: Vec::new(),
-                paths: Vec::new(),
-                verify_fast: None,
-                verify_command: None,
-                retry: mana_pool::RetryContext {
-                    attempt_number: 0,
-                    previous_failure: None,
-                    previous_notes: vec![],
-                },
-                model: None,
+                title: "Waiting on deps".to_string(),
+                reason: "waiting on 1".to_string(),
+                blocker: None,
+                decisions: Vec::new(),
             },
         ];
 
-        let warnings = collect_decision_warnings(&mana_dir, &units, &index).unwrap();
+        let warnings = collect_decision_warnings_from_skipped_units(&skipped);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].id, "1");
         assert_eq!(warnings[0].decisions, vec!["JWT or session cookies?"]);
+    }
+
+    #[test]
+    fn collect_decision_warnings_from_skipped_units_uses_canonical_blocker() {
+        let skipped = vec![plan::BlockedUnit {
+            id: "42".to_string(),
+            title: "Implement auth".to_string(),
+            reason: "unresolved_decision".to_string(),
+            blocker: Some(AutonomyBlockerCode::UnresolvedDecision),
+            decisions: vec![
+                "JWT or session cookies?".to_string(),
+                "Which JWT library?".to_string(),
+            ],
+        }];
+
+        let warnings = collect_decision_warnings_from_skipped_units(&skipped);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].id, "42");
+        assert_eq!(warnings[0].title, "Implement auth");
+        assert_eq!(
+            warnings[0].decisions,
+            vec![
+                "JWT or session cookies?".to_string(),
+                "Which JWT library?".to_string(),
+            ]
+        );
     }
 
     #[test]

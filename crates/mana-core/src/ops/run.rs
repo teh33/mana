@@ -251,7 +251,10 @@ fn build_ready_unit(entry: &IndexEntry, unit: &Unit, weight: u32) -> ReadyUnit {
 }
 
 /// Build a canonical blocked unit for unresolved durable decisions.
-fn unresolved_decision_blocked_unit(entry: &IndexEntry, unit: &Unit) -> Option<BlockedUnit> {
+pub fn blocked_unit_for_unresolved_decisions(
+    entry: &IndexEntry,
+    unit: &Unit,
+) -> Option<BlockedUnit> {
     if unit.decisions.is_empty() {
         return None;
     }
@@ -318,8 +321,8 @@ pub fn compute_ready_queue(
         let unit = Unit::from_file(&unit_path)?;
 
         if !simulate {
-            if let Some(blocked) = unresolved_decision_blocked_unit(entry, &unit) {
-                blocked.push(blocked);
+            if let Some(unresolved_blocked) = blocked_unit_for_unresolved_decisions(entry, &unit) {
+                blocked.push(unresolved_blocked);
                 continue;
             }
 
@@ -524,6 +527,77 @@ mod tests {
     }
 
     // -- compute_downstream_weights tests --
+
+    #[test]
+    fn unresolved_decisions_become_canonical_blocked_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let mana_dir = dir.path().join(".mana");
+        std::fs::create_dir(&mana_dir).unwrap();
+
+        crate::config::Config {
+            project: "test".to_string(),
+            next_id: 1,
+            auto_close_parent: true,
+            run: None,
+            plan: None,
+            max_loops: 10,
+            max_concurrent: 4,
+            poll_interval: 30,
+            extends: vec![],
+            rules_file: None,
+            file_locking: false,
+            worktree: false,
+            on_close: None,
+            on_fail: None,
+            verify_timeout: None,
+            review: None,
+            user: None,
+            user_email: None,
+            auto_commit: false,
+            commit_template: None,
+            research: None,
+            run_model: None,
+            plan_model: None,
+            review_model: None,
+            research_model: None,
+            batch_verify: false,
+            memory_reserve_mb: 0,
+            notify: None,
+        }
+        .save(&mana_dir)
+        .unwrap();
+
+        let mut unit = Unit::new("2", "Dispatchable job with unresolved decisions");
+        unit.kind = UnitKind::Job;
+        unit.verify = Some("cargo test unresolved_decision_blocker".to_string());
+        unit.decisions = vec![
+            "JWT or sessions?".to_string(),
+            "Which provider should be the default?".to_string(),
+        ];
+        unit.to_file(mana_dir.join("2-dispatchable-job-with-unresolved-decisions.md"))
+            .unwrap();
+
+        let queue = compute_ready_queue(&mana_dir, None, false).unwrap();
+        assert!(queue.units.is_empty());
+        assert_eq!(queue.blocked.len(), 1);
+        assert_eq!(queue.blocked[0].id, "2");
+        assert_eq!(queue.blocked[0].reason, "unresolved_decision");
+        assert_eq!(
+            queue.blocked[0].blocker,
+            Some(AutonomyBlockerCode::UnresolvedDecision)
+        );
+        assert_eq!(
+            queue.blocked[0].decisions,
+            vec![
+                "JWT or sessions?".to_string(),
+                "Which provider should be the default?".to_string(),
+            ]
+        );
+
+        let simulated = compute_ready_queue(&mana_dir, None, true).unwrap();
+        assert_eq!(simulated.units.len(), 1);
+        assert!(simulated.blocked.is_empty());
+    }
 
     #[test]
     fn run_only_dispatches_jobs() {

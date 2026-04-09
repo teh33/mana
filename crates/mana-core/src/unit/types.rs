@@ -164,6 +164,135 @@ pub struct AutonomyObservation {
     pub continuation_budget_delta: Option<i32>,
 }
 
+impl Default for AutonomyDisposition {
+    fn default() -> Self {
+        Self {
+            kind: AutonomyDispositionKind::Unknown,
+            blockers: Vec::new(),
+            review: ReviewState::Unknown,
+            verify: VerifyPosture::Unknown,
+            visibility: VisibilityState::Unknown,
+            attempt_pressure: AttemptPressure::Unknown,
+            risk: RiskBand::Unknown,
+            provenance: AutonomyProvenance::Unknown,
+            continuation_budget: None,
+        }
+    }
+}
+
+impl AutonomyDisposition {
+    pub fn unknown() -> Self {
+        Self::default()
+    }
+}
+
+/// Normalized attempt-pressure derivation produced from durable retry state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttemptPressureEvaluation {
+    pub pressure: AttemptPressure,
+    pub blockers: Vec<AutonomyBlockerCode>,
+    pub continuation_budget: Option<u32>,
+    pub budget_limit: u32,
+    pub recent_failure_streak: u32,
+}
+
+/// Resolve the scheduler-facing attempt budget from durable unit policy.
+///
+/// `on_fail.retry.max` overrides the unit-level `max_attempts`; other on-fail
+/// actions keep using the unit-level budget.
+pub fn effective_attempt_budget(max_attempts: u32, on_fail: Option<&OnFailAction>) -> u32 {
+    match on_fail {
+        Some(OnFailAction::Retry { max: Some(max), .. }) => *max,
+        _ => max_attempts,
+    }
+}
+
+/// Derive typed attempt pressure from durable retry state.
+///
+/// Rules:
+/// - circuit-breaker label is a hard tripped state
+/// - escalate-on-fail plus any recent failure means no autonomous retry budget remains
+/// - attempts at or beyond the effective budget are exhausted
+/// - one remaining attempt or a streak of recent failed/abandoned outcomes is near-limit
+/// - otherwise the unit remains within budget
+pub fn derive_attempt_pressure(
+    attempts: u32,
+    max_attempts: u32,
+    on_fail: Option<&OnFailAction>,
+    labels: &[String],
+    attempt_log: &[AttemptRecord],
+    history: &[RunRecord],
+) -> AttemptPressureEvaluation {
+    let budget_limit = effective_attempt_budget(max_attempts, on_fail);
+    let recent_failure_streak = recent_failure_streak(attempt_log, history);
+    let circuit_breaker_tripped = labels.iter().any(|label| label == "circuit-breaker");
+    let escalate_on_failure = matches!(on_fail, Some(OnFailAction::Escalate { .. }));
+
+    let (pressure, blockers, continuation_budget) = if circuit_breaker_tripped {
+        (
+            AttemptPressure::CircuitBreakerTripped,
+            vec![AutonomyBlockerCode::CircuitBreakerTripped],
+            Some(0),
+        )
+    } else if escalate_on_failure && recent_failure_streak > 0 {
+        (
+            AttemptPressure::Exhausted,
+            vec![AutonomyBlockerCode::AttemptBudgetExhausted],
+            Some(0),
+        )
+    } else {
+        let remaining = budget_limit.saturating_sub(attempts);
+        if attempts >= budget_limit {
+            (
+                AttemptPressure::Exhausted,
+                vec![AutonomyBlockerCode::AttemptBudgetExhausted],
+                Some(0),
+            )
+        } else if remaining <= 1 || recent_failure_streak >= 2 {
+            (AttemptPressure::NearLimit, Vec::new(), Some(remaining))
+        } else {
+            (AttemptPressure::WithinBudget, Vec::new(), Some(remaining))
+        }
+    };
+
+    AttemptPressureEvaluation {
+        pressure,
+        blockers,
+        continuation_budget,
+        budget_limit,
+        recent_failure_streak,
+    }
+}
+
+fn recent_failure_streak(attempt_log: &[AttemptRecord], history: &[RunRecord]) -> u32 {
+    recent_attempt_failure_streak(attempt_log).max(recent_verify_failure_streak(history))
+}
+
+fn recent_attempt_failure_streak(attempt_log: &[AttemptRecord]) -> u32 {
+    let mut streak = 0;
+    for attempt in attempt_log.iter().rev() {
+        if attempt.finished_at.is_none() {
+            continue;
+        }
+        if matches!(attempt.outcome, AttemptOutcome::Success) {
+            break;
+        }
+        streak += 1;
+    }
+    streak
+}
+
+fn recent_verify_failure_streak(history: &[RunRecord]) -> u32 {
+    let mut streak = 0;
+    for run in history.iter().rev() {
+        if matches!(run.result, RunResult::Pass) {
+            break;
+        }
+        streak += 1;
+    }
+    streak
+}
+
 // ---------------------------------------------------------------------------
 // RunResult / RunRecord (verification history)
 // ---------------------------------------------------------------------------
@@ -696,6 +825,125 @@ mod tests {
         assert_eq!(restored, disposition);
         assert!(!yaml.contains("blockers:"));
         assert!(!yaml.contains("continuation_budget:"));
+    }
+
+    #[test]
+    fn derive_attempt_pressure_uses_retry_override_budget() {
+        let evaluation = derive_attempt_pressure(
+            3,
+            6,
+            Some(&OnFailAction::Retry {
+                max: Some(4),
+                delay_secs: None,
+            }),
+            &[],
+            &[],
+            &[],
+        );
+
+        assert_eq!(evaluation.pressure, AttemptPressure::NearLimit);
+        assert_eq!(evaluation.budget_limit, 4);
+        assert_eq!(evaluation.continuation_budget, Some(1));
+        assert!(evaluation.blockers.is_empty());
+    }
+
+    #[test]
+    fn derive_attempt_pressure_exhausts_at_budget_limit() {
+        let evaluation = derive_attempt_pressure(3, 3, None, &[], &[], &[]);
+
+        assert_eq!(evaluation.pressure, AttemptPressure::Exhausted);
+        assert_eq!(evaluation.continuation_budget, Some(0));
+        assert_eq!(
+            evaluation.blockers,
+            vec![AutonomyBlockerCode::AttemptBudgetExhausted]
+        );
+    }
+
+    #[test]
+    fn derive_attempt_pressure_escalate_on_fail_exhausts_after_recent_failure() {
+        let now = Utc::now();
+        let evaluation = derive_attempt_pressure(
+            1,
+            5,
+            Some(&OnFailAction::Escalate {
+                priority: Some(0),
+                message: None,
+            }),
+            &[],
+            &[],
+            &[RunRecord {
+                attempt: 1,
+                started_at: now,
+                finished_at: Some(now),
+                duration_secs: Some(1.0),
+                agent: None,
+                result: RunResult::Fail,
+                exit_code: Some(1),
+                tokens: None,
+                cost: None,
+                output_snippet: None,
+                autonomy_observation: None,
+            }],
+        );
+
+        assert_eq!(evaluation.pressure, AttemptPressure::Exhausted);
+        assert_eq!(evaluation.recent_failure_streak, 1);
+        assert_eq!(evaluation.continuation_budget, Some(0));
+    }
+
+    #[test]
+    fn derive_attempt_pressure_uses_recent_failure_streak() {
+        let now = Utc::now();
+        let evaluation = derive_attempt_pressure(
+            1,
+            5,
+            None,
+            &[],
+            &[
+                AttemptRecord {
+                    num: 1,
+                    outcome: AttemptOutcome::Failed,
+                    notes: None,
+                    agent: None,
+                    started_at: Some(now),
+                    finished_at: Some(now),
+                    autonomy_observation: None,
+                },
+                AttemptRecord {
+                    num: 2,
+                    outcome: AttemptOutcome::Abandoned,
+                    notes: None,
+                    agent: None,
+                    started_at: Some(now),
+                    finished_at: Some(now),
+                    autonomy_observation: None,
+                },
+            ],
+            &[],
+        );
+
+        assert_eq!(evaluation.pressure, AttemptPressure::NearLimit);
+        assert_eq!(evaluation.recent_failure_streak, 2);
+        assert_eq!(evaluation.continuation_budget, Some(4));
+    }
+
+    #[test]
+    fn derive_attempt_pressure_trips_from_circuit_breaker_label() {
+        let evaluation = derive_attempt_pressure(
+            1,
+            5,
+            None,
+            &["circuit-breaker".to_string()],
+            &[],
+            &[],
+        );
+
+        assert_eq!(evaluation.pressure, AttemptPressure::CircuitBreakerTripped);
+        assert_eq!(evaluation.continuation_budget, Some(0));
+        assert_eq!(
+            evaluation.blockers,
+            vec![AutonomyBlockerCode::CircuitBreakerTripped]
+        );
     }
 
     #[test]

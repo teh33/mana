@@ -14,7 +14,8 @@ use crate::hooks::{
 use crate::index::{ArchiveIndex, Index, IndexEntry, LockedIndex};
 use crate::ops::verify::run_verify_command;
 use crate::unit::{
-    AttemptOutcome, OnCloseAction, OnFailAction, RunRecord, RunResult, Status, Unit,
+    AttemptOutcome, AutonomyDisposition, AutonomyProvenance, OnCloseAction, OnFailAction,
+    RunRecord, RunResult, Status, Unit,
 };
 use crate::util::title_to_slug;
 
@@ -894,10 +895,13 @@ fn build_pass_output_snippet(
 pub fn process_on_fail(unit: &mut Unit) -> OnFailActionTaken {
     let on_fail = match &unit.on_fail {
         Some(action) => action.clone(),
-        None => return OnFailActionTaken::None,
+        None => {
+            refresh_attempt_pressure(unit);
+            return OnFailActionTaken::None;
+        }
     };
 
-    match on_fail {
+    let action_taken = match on_fail {
         OnFailAction::Retry { max, delay_secs } => {
             let max_retries = max.unwrap_or(unit.max_attempts);
             if unit.attempts < max_retries {
@@ -932,7 +936,10 @@ pub fn process_on_fail(unit: &mut Unit) -> OnFailActionTaken {
             }
             OnFailActionTaken::Escalated
         }
-    }
+    };
+
+    refresh_attempt_pressure(unit);
+    action_taken
 }
 
 /// Check circuit breaker for a unit.
@@ -947,6 +954,7 @@ pub fn check_circuit_breaker(
     max_loops: u32,
 ) -> Result<CircuitBreakerStatus> {
     if max_loops == 0 {
+        refresh_attempt_pressure(unit);
         return Ok(CircuitBreakerStatus {
             tripped: false,
             subtree_total: 0,
@@ -960,12 +968,14 @@ pub fn check_circuit_breaker(
             unit.labels.push("circuit-breaker".to_string());
         }
         unit.priority = 0;
+        refresh_attempt_pressure(unit);
         Ok(CircuitBreakerStatus {
             tripped: true,
             subtree_total,
             max_loops,
         })
     } else {
+        refresh_attempt_pressure(unit);
         Ok(CircuitBreakerStatus {
             tripped: false,
             subtree_total,
@@ -1057,6 +1067,42 @@ fn record_failure_on_unit(unit: &mut Unit, failure: &VerifyFailure) {
         output_snippet,
         autonomy_observation: None,
     });
+    refresh_attempt_pressure(unit);
+}
+
+fn refresh_attempt_pressure(unit: &mut Unit) {
+    let evaluation = crate::unit::derive_attempt_pressure(
+        unit.attempts,
+        unit.max_attempts,
+        unit.on_fail.as_ref(),
+        &unit.labels,
+        &unit.attempt_log,
+        &unit.history,
+    );
+
+    let mut disposition = unit.autonomy_disposition.clone().unwrap_or_else(AutonomyDisposition::unknown);
+    disposition.attempt_pressure = evaluation.pressure;
+    disposition.continuation_budget = evaluation.continuation_budget;
+    disposition.provenance = match disposition.provenance {
+        AutonomyProvenance::Unknown => AutonomyProvenance::AttemptObservation,
+        AutonomyProvenance::AttemptObservation => AutonomyProvenance::AttemptObservation,
+        _ => AutonomyProvenance::Mixed,
+    };
+
+    disposition
+        .blockers
+        .retain(|blocker| !matches!(
+            blocker,
+            crate::unit::AutonomyBlockerCode::AttemptBudgetExhausted
+                | crate::unit::AutonomyBlockerCode::CircuitBreakerTripped
+        ));
+    for blocker in evaluation.blockers {
+        if !disposition.blockers.contains(&blocker) {
+            disposition.blockers.push(blocker);
+        }
+    }
+
+    unit.autonomy_disposition = Some(disposition);
 }
 
 /// Capture verify stdout as unit outputs.
@@ -2016,6 +2062,9 @@ mod tests {
         assert_eq!(unit.attempts, 1);
         assert_eq!(unit.history.len(), 1);
         assert_eq!(unit.history[0].result, RunResult::Fail);
+        let disposition = unit.autonomy_disposition.expect("attempt pressure should be derived");
+        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::WithinBudget);
+        assert_eq!(disposition.continuation_budget, Some(2));
     }
 
     #[test]
@@ -2052,6 +2101,9 @@ mod tests {
         let result = process_on_fail(&mut unit);
         assert!(matches!(result, OnFailActionTaken::Retry { .. }));
         assert!(unit.claimed_by.is_none());
+        let disposition = unit.autonomy_disposition.expect("attempt pressure should be present");
+        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::WithinBudget);
+        assert_eq!(disposition.continuation_budget, Some(4));
     }
 
     #[test]
@@ -2062,11 +2114,29 @@ mod tests {
             message: None,
         });
         unit.priority = 2;
+        unit.history.push(RunRecord {
+            attempt: 1,
+            started_at: Utc::now(),
+            finished_at: Some(Utc::now()),
+            duration_secs: Some(1.0),
+            agent: None,
+            result: RunResult::Fail,
+            exit_code: Some(1),
+            tokens: None,
+            cost: None,
+            output_snippet: None,
+            autonomy_observation: None,
+        });
 
         let result = process_on_fail(&mut unit);
         assert!(matches!(result, OnFailActionTaken::Escalated));
         assert_eq!(unit.priority, 0);
         assert!(unit.labels.contains(&"escalated".to_string()));
+        let disposition = unit.autonomy_disposition.expect("attempt pressure should be present");
+        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::Exhausted);
+        assert!(disposition
+            .blockers
+            .contains(&crate::unit::AutonomyBlockerCode::AttemptBudgetExhausted));
     }
 
     #[test]
@@ -2086,6 +2156,34 @@ mod tests {
         let mut unit = Unit::new("1", "Task");
         let result = check_circuit_breaker(&mana_dir, &mut unit, "1", 0).unwrap();
         assert!(!result.tripped);
+        let disposition = unit.autonomy_disposition.expect("attempt pressure should be present");
+        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::WithinBudget);
+        assert_eq!(disposition.continuation_budget, Some(3));
+    }
+
+    #[test]
+    fn circuit_breaker_sets_tripped_attempt_pressure() {
+        let (_dir, mana_dir) = setup_mana_dir();
+        let mut root = Unit::new("1", "Root");
+        root.attempts = 2;
+        write_unit(&mana_dir, &root);
+
+        let mut child = Unit::new("1.1", "Child");
+        child.parent = Some("1".to_string());
+        child.attempts = 1;
+        write_unit(&mana_dir, &child);
+
+        let mut loaded_child = Unit::from_file(find_unit_file(&mana_dir, "1.1").unwrap()).unwrap();
+        let result = check_circuit_breaker(&mana_dir, &mut loaded_child, "1", 3).unwrap();
+        assert!(result.tripped);
+        let disposition = loaded_child
+            .autonomy_disposition
+            .expect("attempt pressure should be present");
+        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::CircuitBreakerTripped);
+        assert!(disposition
+            .blockers
+            .contains(&crate::unit::AutonomyBlockerCode::CircuitBreakerTripped));
+        assert_eq!(disposition.continuation_budget, Some(0));
     }
 
     // =====================================================================
