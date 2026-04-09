@@ -274,7 +274,7 @@ fn collect_outcome_counts(
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-struct PoolBatchVerifySummary {
+pub(super) struct PoolBatchVerifySummary {
     commands_run: usize,
     passed: Vec<String>,
     failed: Vec<String>,
@@ -809,7 +809,7 @@ fn run_once(
 
             // Ready-queue: start each unit as soon as its specific deps finish.
             // Progress (▸ start, ✓/✗ done) is printed in real-time by the queue.
-            let (mut results, had_failure) = run_ready_queue_direct(
+            let (mut results, had_failure, ready_queue_batch_verify) = run_ready_queue_direct(
                 mana_dir,
                 &plan.all_units,
                 &plan.index,
@@ -845,25 +845,40 @@ fn run_once(
             let mut branch_any_failed = had_failure;
 
             if run_cfg.batch_verify {
-                match execute_direct_batch_verify(mana_dir, &plan.all_units, &mut results, &run_cfg)
-                {
-                    Ok((bv, verify_failed)) => {
-                        if params.json_stream {
-                            stream::emit(&StreamEvent::BatchVerify {
-                                commands_run: bv.commands_run,
-                                passed: bv.passed.clone(),
-                                failed: bv.failed.clone(),
-                            });
-                        } else {
-                            print_pool_batch_verify_result(&bv);
+                if let Some(bv) = ready_queue_batch_verify {
+                    if params.json_stream {
+                        stream::emit(&StreamEvent::BatchVerify {
+                            commands_run: bv.commands_run,
+                            passed: bv.passed.clone(),
+                            failed: bv.failed.clone(),
+                        });
+                    } else {
+                        print_pool_batch_verify_result(&bv);
+                    }
+                    if !bv.failed.is_empty() {
+                        branch_any_failed = true;
+                    }
+                } else {
+                    match execute_direct_batch_verify(mana_dir, &plan.all_units, &mut results, &run_cfg)
+                    {
+                        Ok((bv, verify_failed)) => {
+                            if params.json_stream {
+                                stream::emit(&StreamEvent::BatchVerify {
+                                    commands_run: bv.commands_run,
+                                    passed: bv.passed.clone(),
+                                    failed: bv.failed.clone(),
+                                });
+                            } else {
+                                print_pool_batch_verify_result(&bv);
+                            }
+                            if verify_failed {
+                                branch_any_failed = true;
+                            }
                         }
-                        if verify_failed {
+                        Err(e) => {
+                            eprintln!("Batch verify error: {}", e);
                             branch_any_failed = true;
                         }
-                    }
-                    Err(e) => {
-                        eprintln!("Batch verify error: {}", e);
-                        branch_any_failed = true;
                     }
                 }
             }

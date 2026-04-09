@@ -18,7 +18,7 @@ use crate::util::natural_cmp;
 
 use super::plan::SizedUnit;
 use super::wave::{compute_downstream_weights, compute_waves};
-use super::{format_duration, AgentResult};
+use super::{format_duration, AgentResult, PoolBatchVerifySummary};
 
 /// Check if all dependencies of an index entry are closed.
 ///
@@ -154,7 +154,7 @@ pub(super) fn run_ready_queue_direct(
     index: &Index,
     cfg: &super::RunConfig,
     keep_going: bool,
-) -> Result<(Vec<AgentResult>, bool)> {
+) -> Result<(Vec<AgentResult>, bool, Option<PoolBatchVerifySummary>)> {
     let max_jobs = cfg.max_jobs;
     let timeout_minutes = cfg.timeout_minutes;
     let idle_timeout_minutes = cfg.idle_timeout_minutes;
@@ -381,13 +381,13 @@ pub(super) fn run_ready_queue_direct(
                     if running_count > 0 {
                         super::force_kill_all_children();
                     }
-                    return Ok((results, true));
+                    return Ok((results, true, None));
                 }
                 match rx.recv_timeout(Duration::from_millis(200)) {
                     Ok(result) => break result,
                     Err(mpsc::RecvTimeoutError::Timeout) => continue,
                     Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        return Ok((results, any_failed));
+                        return Ok((results, any_failed, None));
                     }
                 }
             };
@@ -426,7 +426,7 @@ pub(super) fn run_ready_queue_direct(
                             results.push(r);
                         }
                     }
-                    return Ok((results, true));
+                    return Ok((results, true, None));
                 }
             }
 
@@ -440,7 +440,7 @@ pub(super) fn run_ready_queue_direct(
         results.push(result);
     }
 
-    Ok((results, any_failed))
+    Ok((results, any_failed, None))
 }
 
 /// Which direct-mode agent to use.
