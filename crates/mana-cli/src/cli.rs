@@ -70,7 +70,7 @@ Commands:
 Getting started:
   mana init                                         Initialize .mana/ in this directory
   mana create \"fix bug\" --verify \"cargo test auth\"  Create a task with a verify gate
-  mana run                                          Dispatch ready jobs to agents
+  imp run <unit-id>                                 Preferred single-unit execution path
   mana status                                       See what's in flight
 
 See 'mana <command> --help' for details and examples."
@@ -154,8 +154,8 @@ Examples:
     ///
     /// Every unit needs a verify gate (--verify) — a shell command that must exit 0
     /// to close the unit. The --description is the agent's prompt when dispatched via
-    /// `mana run`: include concrete steps, file paths, embedded types/signatures, and
-    /// what NOT to do.
+    /// a runtime path like `imp run <id>` or legacy `mana run`: include concrete steps,
+    /// file paths, embedded types/signatures, and what NOT to do.
     ///
     /// Use -p (--pass-ok) when verify already passes (refactors, docs, type changes).
     /// Use --parent to create child units under a larger parent task.
@@ -906,7 +906,18 @@ Examples:
     /// Manage project configuration
     #[command(
         display_order = 35,
-        after_help = "Examples:\n  mana config get run_model\n  mana config set run_model gpt-5.3-codex\n  mana config set plan_model claude-sonnet-4-6\n  mana config set review_model haiku\n  mana config set research_model gpt-5.4\n\nModel keys:\n  run_model       Default model for mana run\n  plan_model      Default model for mana plan\n  review_model    Default model for AI review flows\n  research_model  Default model for project-level research/planning"
+        after_help = "Examples:
+  mana config get run_model
+  mana config set run_model gpt-5.3-codex
+  mana config set plan_model claude-sonnet-4-6
+  mana config set review_model haiku
+  mana config set research_model gpt-5.4
+
+Model keys:
+  run_model       Default model for legacy mana run compatibility flows
+  plan_model      Default model for mana plan
+  review_model    Default model for AI review flows
+  research_model  Default model for project-level research/planning"
     )]
     Config {
         #[command(subcommand)]

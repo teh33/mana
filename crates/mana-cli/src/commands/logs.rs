@@ -80,7 +80,7 @@ pub fn cmd_logs(mana_dir: &Path, id: &str, follow: bool, all: bool) -> Result<()
         }
         None => {
             anyhow::bail!(
-                "No logs for unit {}. Has it been dispatched with mana run?",
+                "No logs for unit {}. Has it been dispatched through the runtime path yet (legacy `mana run` or preferred `imp run <id>`)?",
                 id
             );
         }
@@ -132,7 +132,7 @@ fn show_all_logs(unit_id: &str) -> Result<()> {
 
     if logs.is_empty() {
         anyhow::bail!(
-            "No logs for unit {}. Has it been dispatched with mana run?",
+            "No logs for unit {}. Has it been dispatched through the runtime path yet (legacy `mana run` or preferred `imp run <id>`)?",
             unit_id
         );
     }

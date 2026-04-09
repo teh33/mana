@@ -203,7 +203,7 @@ This project uses `mana` for task tracking.
 - `mana status` — see what's in flight
 - `mana context <id>` — load full context for a unit
 - `mana close <id>` — close a unit (runs verify gate first)
-- When dispatched via `mana run`, read `mana show <id>` for full instructions.
+- When dispatched via a runtime path (`imp run <id>` preferred, `mana run` legacy compatibility), read `mana show <id>` for full instructions.
 "#
         );
         let created = !claude_md.exists();
@@ -281,7 +281,7 @@ fn onboard_pi(project_root: &Path, actions: &mut Vec<OnboardAction>) -> Result<(
         r#"{MARKER}
 # mana — task coordination
 
-This project uses `mana` for task tracking and agent dispatch.
+This project uses `mana` for task tracking and agent/runtime coordination.
 
 ## Key commands
 
@@ -295,7 +295,7 @@ mana update <id> --note "..."  # Log progress or failures
 
 ## Working on a unit
 
-When dispatched via `mana run`:
+When dispatched via a runtime path (`imp run <id>` preferred, `mana run` legacy compatibility):
 1. Run `mana show <id>` to read the full unit spec
 2. Run `mana context <id>` to load referenced files
 3. Implement what the unit describes
@@ -395,7 +395,7 @@ fn onboard_agents_md(project_root: &Path, actions: &mut Vec<OnboardAction>) -> R
 
 ## mana — task coordination
 
-This project uses `mana` for task tracking and agent dispatch.
+This project uses `mana` for task tracking and agent/runtime coordination.
 
 Key commands:
 - `mana status` — see claimed, ready, and blocked units
@@ -536,7 +536,7 @@ fn onboard_fallback(project_root: &Path, actions: &mut Vec<OnboardAction>) -> Re
         r#"{MARKER}
 # Agent Instructions
 
-This project uses `mana` for task tracking and agent dispatch.
+This project uses `mana` for task tracking and agent/runtime coordination.
 
 ## mana workflow
 

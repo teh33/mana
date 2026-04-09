@@ -33,6 +33,7 @@ path = "src/main.rs"
 
 [dependencies]
 mana-core = { path = "../mana-core", version = "0.3.0" }
+mana-pool = { path = "../mana-pool", version = "0.1.0" }
 mana-review = { path = "../mana-review", version = "0.1.0" }
 anyhow = "1"
 chrono = { version = "0.4.20", features = ["serde"] }

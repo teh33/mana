@@ -123,7 +123,7 @@ fn emit_stuck_events(
     }
 }
 
-fn execute_verify_groups(
+pub fn execute_deferred_verify(
     config: &PoolConfig,
     units: &[DispatchUnit],
     results: &mut [AgentResult],
@@ -206,7 +206,7 @@ fn finish_dispatch(
     event_tx: &mpsc::Sender<PoolEvent>,
     started: Instant,
 ) -> Result<DispatchOutcome> {
-    if execute_verify_groups(config, units, &mut results, event_tx)? {
+    if execute_deferred_verify(config, units, &mut results, event_tx)? {
         any_failed = true;
     }
 

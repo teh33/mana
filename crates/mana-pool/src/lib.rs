@@ -14,6 +14,6 @@ mod dispatch;
 mod memory;
 mod types;
 
-pub use dispatch::run_dispatch;
+pub use dispatch::{execute_deferred_verify, group_verify_commands, run_dispatch};
 pub use memory::{available_memory_mb, has_sufficient_memory};
 pub use types::*;

@@ -107,6 +107,11 @@ pub enum StreamEvent {
         passed: Vec<String>,
         failed: Vec<String>,
     },
+    VerifyGroupRun {
+        command: String,
+        unit_ids: Vec<String>,
+        success: bool,
+    },
     DryRun {
         parent_id: String,
         rounds: Vec<RoundPlan>,

@@ -6,7 +6,9 @@ use crate::blocking::{check_blocked_with_archive, check_scope_warning, BlockReas
 use crate::config::Config;
 use crate::index::{ArchiveIndex, Index, IndexEntry};
 use crate::stream::{self, StreamEvent};
-use crate::unit::Status;
+use crate::unit::{AttemptOutcome, Status};
+
+use mana_pool::RetryContext;
 
 use super::ready_queue::all_deps_closed;
 use super::wave::{
@@ -27,6 +29,12 @@ pub struct SizedUnit {
     pub produces: Vec<String>,
     pub requires: Vec<String>,
     pub paths: Vec<String>,
+    /// Optional fast verify command to run before the full verify gate.
+    pub verify_fast: Option<String>,
+    /// Deferred verify command for grouped post-agent verification.
+    pub verify_command: Option<String>,
+    /// Retry context derived from the unit's attempt history.
+    pub retry: RetryContext,
     /// Per-unit model override from frontmatter.
     pub model: Option<String>,
 }
@@ -162,6 +170,21 @@ pub(super) fn plan_dispatch(
         let unit_path = crate::discovery::find_unit_file(mana_dir, &entry.id)?;
         let unit = crate::unit::Unit::from_file(&unit_path)?;
 
+        let retry = RetryContext {
+            attempt_number: unit.attempts,
+            previous_failure: unit.attempt_log.iter().rev().find_map(|attempt| {
+                match attempt.outcome {
+                    AttemptOutcome::Failed | AttemptOutcome::Abandoned => attempt.notes.clone(),
+                    AttemptOutcome::Success => None,
+                }
+            }),
+            previous_notes: unit
+                .attempt_log
+                .iter()
+                .filter_map(|attempt| attempt.notes.clone())
+                .collect(),
+        };
+
         dispatch_units.push(SizedUnit {
             id: entry.id.clone(),
             title: entry.title.clone(),
@@ -172,6 +195,9 @@ pub(super) fn plan_dispatch(
             produces: entry.produces.clone(),
             requires: entry.requires.clone(),
             paths: entry.paths.clone(),
+            verify_fast: unit.verify_fast.clone(),
+            verify_command: unit.verify.clone(),
+            retry,
             model: unit.model.clone(),
         });
     }

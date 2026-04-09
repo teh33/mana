@@ -197,7 +197,7 @@ pub fn batch_verify_ids(mana_dir: &Path, ids: &[String]) -> Result<BatchVerifyRe
 /// Set a unit back to Open status and release its claim.
 ///
 /// Used when batch verify fails — returns the unit to the pool for re-dispatch.
-fn reopen_awaiting_unit(mana_dir: &Path, id: &str) -> Result<()> {
+pub fn reopen_awaiting_unit(mana_dir: &Path, id: &str) -> Result<()> {
     let unit_path =
         find_unit_file(mana_dir, id).with_context(|| format!("Unit not found: {}", id))?;
     let mut unit =

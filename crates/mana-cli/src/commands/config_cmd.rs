@@ -7,7 +7,7 @@ use serde_yml::Value;
 use crate::config::{Config, GlobalConfig, DEFAULT_COMMIT_TEMPLATE};
 
 const CONFIG_KEY_HELP: &str = "Available keys: project, next_id, auto_close_parent, run, plan, research, run_model, plan_model, review_model, research_model, max_loops, max_concurrent, poll_interval, rules_file, file_locking, worktree, auto_commit, batch_verify, verify_timeout, commit_template, on_close, on_fail, memory_reserve_mb, user, user.email";
-const MODEL_KEY_HELP: &str = "Model keys: run_model = mana run, plan_model = mana plan, review_model = AI review, research_model = project research/planning";
+const MODEL_KEY_HELP: &str = "Model keys: run_model = legacy mana run compatibility, plan_model = mana plan, review_model = AI review, research_model = project research/planning";
 const INSPECT_KEYS: &[&str] = &[
     "run",
     "run_model",
@@ -681,7 +681,7 @@ fn is_legacy_run_template(run: &str) -> bool {
 
 fn model_key_scope(key: &str) -> Option<&'static str> {
     match key {
-        "run_model" => Some("mana run"),
+        "run_model" => Some("legacy mana run compatibility"),
         "plan_model" => Some("mana plan"),
         "review_model" => Some("AI review flows"),
         "research_model" => Some("project research/planning"),

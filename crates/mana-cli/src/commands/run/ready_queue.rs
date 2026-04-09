@@ -965,6 +965,13 @@ mod tests {
             produces: produces.into_iter().map(|s| s.to_string()).collect(),
             requires: requires.into_iter().map(|s| s.to_string()).collect(),
             paths: vec![],
+            verify_fast: None,
+            verify_command: None,
+            retry: mana_pool::RetryContext {
+                attempt_number: 0,
+                previous_failure: None,
+                previous_notes: vec![],
+            },
             model: None,
         }
     }
@@ -1285,6 +1292,13 @@ mod tests {
             produces: vec![],
             requires: vec![],
             paths: paths.into_iter().map(|s| s.to_string()).collect(),
+            verify_fast: None,
+            verify_command: None,
+            retry: mana_pool::RetryContext {
+                attempt_number: 0,
+                previous_failure: None,
+                previous_notes: vec![],
+            },
             model: None,
         }
     }

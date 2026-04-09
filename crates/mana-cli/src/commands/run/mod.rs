@@ -28,10 +28,11 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use mana_pool::{DispatchUnit, PoolConfig, PoolEvent};
 use serde::Serialize;
 
 use crate::commands::review::{cmd_review, ReviewArgs};
@@ -271,6 +272,126 @@ fn collect_outcome_counts(
 
     (counts, closed_ids)
 }
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct PoolBatchVerifySummary {
+    commands_run: usize,
+    passed: Vec<String>,
+    failed: Vec<String>,
+}
+
+fn execute_direct_batch_verify(
+    mana_dir: &Path,
+    units: &[SizedUnit],
+    results: &mut [AgentResult],
+    run_cfg: &RunConfig,
+) -> Result<(PoolBatchVerifySummary, bool)> {
+    let dispatch_units: Vec<DispatchUnit> = units
+        .iter()
+        .map(|unit| DispatchUnit {
+            id: unit.id.clone(),
+            title: unit.title.clone(),
+            priority: unit.priority,
+            dependencies: unit.dependencies.clone(),
+            parent: unit.parent.clone(),
+            produces: unit.produces.clone(),
+            requires: unit.requires.clone(),
+            paths: unit.paths.clone(),
+            verify_fast: unit.verify_fast.clone(),
+            verify_command: unit.verify_command.clone(),
+            retry: unit.retry.clone(),
+        })
+        .collect();
+
+    let mut pool_results: Vec<mana_pool::AgentResult> = results
+        .iter()
+        .map(|result| mana_pool::AgentResult {
+            unit_id: result.id.clone(),
+            title: result.title.clone(),
+            success: result.success,
+            duration: result.duration,
+            tokens: result.total_tokens,
+            cost: result.total_cost,
+            error: result.error.clone(),
+            tool_count: result.tool_count,
+            turns: result.turns,
+            failure_summary: result.failure_summary.clone(),
+        })
+        .collect();
+
+    let pool_config = PoolConfig {
+        max_concurrent: run_cfg.max_jobs,
+        memory_reserve_mb: run_cfg.memory_reserve_mb,
+        timeout_minutes: run_cfg.timeout_minutes,
+        idle_timeout_minutes: run_cfg.idle_timeout_minutes,
+        keep_going: true,
+        batch_verify: run_cfg.batch_verify,
+        file_locking: run_cfg.file_locking,
+        use_worktrees: false,
+        worktree_base: None,
+        run_model: run_cfg.run_model.clone(),
+        mana_dir: mana_dir.to_path_buf(),
+    };
+
+    let (event_tx, event_rx) = std::sync::mpsc::channel::<PoolEvent>();
+    let any_failed = mana_pool::execute_deferred_verify(
+        &pool_config,
+        &dispatch_units,
+        &mut pool_results,
+        &event_tx,
+    )?;
+    drop(event_tx);
+
+    let mut summary = PoolBatchVerifySummary::default();
+    for event in event_rx.try_iter() {
+        if let PoolEvent::VerifyGroupRun {
+            command: _,
+            unit_ids,
+            success,
+        } = event
+        {
+            summary.commands_run += 1;
+            if success {
+                summary.passed.extend(unit_ids);
+            } else {
+                summary.failed.extend(unit_ids);
+            }
+        }
+    }
+
+    for (result, pool_result) in results.iter_mut().zip(pool_results.into_iter()) {
+        result.success = pool_result.success;
+        result.error = pool_result.error;
+        result.failure_summary = pool_result.failure_summary;
+    }
+
+    Ok((summary, any_failed))
+}
+
+fn print_pool_batch_verify_result(result: &PoolBatchVerifySummary) {
+    let total = result.passed.len() + result.failed.len();
+    eprintln!(
+        "\nBatch verify: {} command{}, {}/{} unit{} passed",
+        result.commands_run,
+        if result.commands_run == 1 { "" } else { "s" },
+        result.passed.len(),
+        total,
+        if total == 1 { "" } else { "s" },
+    );
+
+    if !result.passed.is_empty() {
+        eprintln!(
+            "  ✓ {} unit{} passed",
+            result.passed.len(),
+            if result.passed.len() == 1 { "" } else { "s" }
+        );
+    }
+
+    if !result.failed.is_empty() {
+        eprintln!("  ✗ failed units: {}", result.failed.join(", "));
+    }
+}
+
 
 // ---------------------------------------------------------------------------
 // Signal handling for clean agent shutdown
@@ -688,7 +809,7 @@ fn run_once(
 
             // Ready-queue: start each unit as soon as its specific deps finish.
             // Progress (▸ start, ✓/✗ done) is printed in real-time by the queue.
-            let (results, had_failure) = run_ready_queue_direct(
+            let (mut results, had_failure) = run_ready_queue_direct(
                 mana_dir,
                 &plan.all_units,
                 &plan.index,
@@ -723,19 +844,21 @@ fn run_once(
             }
             let mut branch_any_failed = had_failure;
 
-            // After all agents complete, run batch verification if enabled.
-            // Each agent exits with AwaitingVerify status; the runner now resolves them.
             if run_cfg.batch_verify {
-                match mana_core::ops::batch_verify::batch_verify(mana_dir) {
-                    Ok(bv) => {
+                match execute_direct_batch_verify(mana_dir, &plan.all_units, &mut results, &run_cfg)
+                {
+                    Ok((bv, verify_failed)) => {
                         if params.json_stream {
                             stream::emit(&StreamEvent::BatchVerify {
                                 commands_run: bv.commands_run,
                                 passed: bv.passed.clone(),
-                                failed: bv.failed.iter().map(|f| f.unit_id.clone()).collect(),
+                                failed: bv.failed.clone(),
                             });
                         } else {
-                            print_batch_verify_result(&bv);
+                            print_pool_batch_verify_result(&bv);
+                        }
+                        if verify_failed {
+                            branch_any_failed = true;
                         }
                     }
                     Err(e) => {
@@ -973,66 +1096,6 @@ fn run_loop(
 
     eprintln!("Reached max_loops ({}). Stopping.", max_loops);
     Ok(())
-}
-
-/// Print a human-readable summary of a batch verify run.
-///
-/// Example output:
-///   Batch verify: 2 commands, 3/4 units passed
-///     ✓ cargo check -p mana-cli  (units: 1.1, 1.2, 1.3)
-///     ✗ cargo test -p mana-core  (unit: 1.4) — exit code 1
-fn print_batch_verify_result(result: &mana_core::ops::batch_verify::BatchVerifyResult) {
-    let total = result.passed.len() + result.failed.len();
-    eprintln!(
-        "\nBatch verify: {} command{}, {}/{} unit{} passed",
-        result.commands_run,
-        if result.commands_run == 1 { "" } else { "s" },
-        result.passed.len(),
-        total,
-        if total == 1 { "" } else { "s" },
-    );
-
-    if !result.passed.is_empty() {
-        eprintln!(
-            "  ✓ {} unit{} passed",
-            result.passed.len(),
-            if result.passed.len() == 1 { "" } else { "s" }
-        );
-    }
-
-    // Group failures by verify command for compact display.
-    let mut by_cmd: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
-    for failure in &result.failed {
-        by_cmd
-            .entry(&failure.verify_command)
-            .or_default()
-            .push(&failure.unit_id);
-    }
-
-    // Sort for deterministic output.
-    let mut cmd_entries: Vec<(&str, Vec<&str>)> = by_cmd.into_iter().collect();
-    cmd_entries.sort_by_key(|(cmd, _)| *cmd);
-
-    for (cmd, ids) in cmd_entries {
-        let ids_str = ids.join(", ");
-        let unit_word = if ids.len() == 1 { "unit" } else { "units" };
-        // Find exit code for this command from the first matching failure
-        let exit_info = result
-            .failed
-            .iter()
-            .find(|f| f.verify_command == cmd)
-            .map(|f| {
-                if f.timed_out {
-                    " — timed out".to_string()
-                } else if let Some(code) = f.exit_code {
-                    format!(" — exit code {}", code)
-                } else {
-                    String::new()
-                }
-            })
-            .unwrap_or_default();
-        eprintln!("  ✗ {}  ({}: {}){}", cmd, unit_word, ids_str, exit_info);
-    }
 }
 
 /// Format a duration as M:SS.
@@ -1559,6 +1622,13 @@ mod tests {
                 produces: Vec::new(),
                 requires: Vec::new(),
                 paths: Vec::new(),
+                verify_fast: None,
+                verify_command: None,
+                retry: mana_pool::RetryContext {
+                    attempt_number: 0,
+                    previous_failure: None,
+                    previous_notes: vec![],
+                },
                 model: None,
             },
             SizedUnit {
@@ -1571,6 +1641,13 @@ mod tests {
                 produces: Vec::new(),
                 requires: Vec::new(),
                 paths: Vec::new(),
+                verify_fast: None,
+                verify_command: None,
+                retry: mana_pool::RetryContext {
+                    attempt_number: 0,
+                    previous_failure: None,
+                    previous_notes: vec![],
+                },
                 model: None,
             },
         ];
@@ -1700,6 +1777,114 @@ mod tests {
         assert_eq!(counts.awaiting_verify, 1);
         assert_eq!(counts.skipped, 2);
         assert_eq!(closed_ids, vec!["1".to_string()]);
+    }
+
+    #[test]
+    fn execute_direct_batch_verify_dedups_shared_commands() {
+        let (_dir, mana_dir) = make_mana_dir();
+        write_config(&mana_dir, Some("echo {id}"));
+
+        let mut unit1 = crate::unit::Unit::new("1", "One");
+        unit1.verify = Some("true".to_string());
+        unit1.status = Status::AwaitingVerify;
+        unit1.to_file(mana_dir.join("1-one.md")).unwrap();
+
+        let mut unit2 = crate::unit::Unit::new("2", "Two");
+        unit2.verify = Some("true".to_string());
+        unit2.status = Status::AwaitingVerify;
+        unit2.to_file(mana_dir.join("2-two.md")).unwrap();
+
+        let index = crate::index::Index::build(&mana_dir).unwrap();
+        index.save(&mana_dir).unwrap();
+
+        let units = vec![
+            SizedUnit {
+                id: "1".to_string(),
+                title: "One".to_string(),
+                action: UnitAction::Implement,
+                priority: 2,
+                dependencies: Vec::new(),
+                parent: None,
+                produces: Vec::new(),
+                requires: Vec::new(),
+                paths: Vec::new(),
+                verify_fast: None,
+                verify_command: Some("true".to_string()),
+                retry: mana_pool::RetryContext {
+                    attempt_number: 0,
+                    previous_failure: None,
+                    previous_notes: vec![],
+                },
+                model: None,
+            },
+            SizedUnit {
+                id: "2".to_string(),
+                title: "Two".to_string(),
+                action: UnitAction::Implement,
+                priority: 2,
+                dependencies: Vec::new(),
+                parent: None,
+                produces: Vec::new(),
+                requires: Vec::new(),
+                paths: Vec::new(),
+                verify_fast: None,
+                verify_command: Some("true".to_string()),
+                retry: mana_pool::RetryContext {
+                    attempt_number: 0,
+                    previous_failure: None,
+                    previous_notes: vec![],
+                },
+                model: None,
+            },
+        ];
+
+        let mut results = vec![
+            AgentResult {
+                id: "1".to_string(),
+                title: "One".to_string(),
+                action: UnitAction::Implement,
+                success: true,
+                duration: Duration::from_secs(1),
+                total_tokens: None,
+                total_cost: None,
+                error: None,
+                tool_count: 0,
+                turns: 0,
+                failure_summary: None,
+            },
+            AgentResult {
+                id: "2".to_string(),
+                title: "Two".to_string(),
+                action: UnitAction::Implement,
+                success: true,
+                duration: Duration::from_secs(1),
+                total_tokens: None,
+                total_cost: None,
+                error: None,
+                tool_count: 0,
+                turns: 0,
+                failure_summary: None,
+            },
+        ];
+
+        let run_cfg = RunConfig {
+            max_jobs: 2,
+            timeout_minutes: 30,
+            idle_timeout_minutes: 5,
+            json_stream: false,
+            file_locking: false,
+            run_model: None,
+            batch_verify: true,
+            memory_reserve_mb: 0,
+        };
+
+        let (summary, any_failed) =
+            execute_direct_batch_verify(&mana_dir, &units, &mut results, &run_cfg).unwrap();
+
+        assert!(!any_failed);
+        assert_eq!(summary.commands_run, 1);
+        assert_eq!(summary.failed, Vec::<String>::new());
+        assert_eq!(summary.passed, vec!["1".to_string(), "2".to_string()]);
     }
 
     #[test]

@@ -164,7 +164,8 @@ pub fn cmd_context(
     instructions: Option<String>,
     overlaps_json: Option<String>,
 ) -> Result<()> {
-    // --agent-prompt: output the full structured prompt that an agent sees during mana run
+    // --agent-prompt: output the full structured prompt-shaped task packet
+    // that a runtime/agent sees during imp-run or legacy mana-run compatibility flows
     if agent_prompt {
         let unit_path =
             find_unit_file(mana_dir, id).context(format!("Could not find unit with ID: {}", id))?;
