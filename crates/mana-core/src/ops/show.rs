@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::discovery::find_unit_file;
+use crate::discovery::{find_archived_unit, find_unit_file};
 use crate::unit::Unit;
 
 /// Result of loading a unit.
@@ -13,8 +13,9 @@ pub struct GetResult {
 
 /// Load a unit by ID and return its full data.
 pub fn get(mana_dir: &Path, id: &str) -> Result<GetResult> {
-    let unit_path =
-        find_unit_file(mana_dir, id).with_context(|| format!("Unit not found: {}", id))?;
+    let unit_path = find_unit_file(mana_dir, id)
+        .or_else(|_| find_archived_unit(mana_dir, id))
+        .with_context(|| format!("Unit not found: {}", id))?;
     let unit =
         Unit::from_file(&unit_path).with_context(|| format!("Failed to load unit: {}", id))?;
     Ok(GetResult {
@@ -27,6 +28,7 @@ pub fn get(mana_dir: &Path, id: &str) -> Result<GetResult> {
 mod tests {
     use super::*;
     use crate::ops::create::{self, tests::minimal_params};
+    use crate::util::title_to_slug;
     use std::fs;
     use tempfile::TempDir;
 
@@ -79,8 +81,27 @@ mod tests {
     }
 
     #[test]
+    fn get_archived_when_active_missing() {
+        let (_dir, bd) = setup();
+        let archive_dir = bd.join("archive/2026/04");
+        fs::create_dir_all(&archive_dir).unwrap();
+
+        let mut unit = Unit::new("1", "Archived task");
+        unit.is_archived = true;
+        let slug = title_to_slug(&unit.title);
+        let archived_path = archive_dir.join(format!("1-{}.md", slug));
+        unit.to_file(&archived_path).unwrap();
+
+        let r = get(&bd, "1").unwrap();
+        assert_eq!(r.unit.title, "Archived task");
+        assert_eq!(r.path, archived_path);
+        assert!(r.unit.is_archived);
+    }
+
+    #[test]
     fn get_nonexistent() {
         let (_dir, bd) = setup();
         assert!(get(&bd, "99").is_err());
     }
+
 }

@@ -424,6 +424,23 @@ mod tests {
     }
 
     #[test]
+    fn show_archived_unit() {
+        let dir = TempDir::new().unwrap();
+        let mana_dir = dir.path().join(".mana");
+        let archive_dir = mana_dir.join("archive/2026/04");
+        std::fs::create_dir_all(&archive_dir).unwrap();
+
+        let mut unit = Unit::new("1", "Archived unit");
+        unit.is_archived = true;
+        let slug = title_to_slug(&unit.title);
+        let unit_path = archive_dir.join(format!("1-{}.md", slug));
+        unit.to_file(&unit_path).unwrap();
+
+        let result = cmd_show("1", false, false, false, &mana_dir);
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn show_not_found() {
         let dir = TempDir::new().unwrap();
         let mana_dir = dir.path().join(".mana");
