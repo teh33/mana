@@ -14,8 +14,8 @@ use crate::hooks::{
 use crate::index::{ArchiveIndex, Index, IndexEntry, LockedIndex};
 use crate::ops::verify::run_verify_command;
 use crate::unit::{
-    AttemptOutcome, AutonomyDisposition, AutonomyProvenance, OnCloseAction, OnFailAction,
-    RunRecord, RunResult, Status, Unit,
+    AttemptOutcome, OnCloseAction, OnFailAction, RunRecord, RunResult, Status, Unit,
+    VerifyPosture,
 };
 use crate::util::title_to_slug;
 
@@ -353,6 +353,10 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
     if opts.defer_verify {
         unit.status = Status::AwaitingVerify;
         unit.updated_at = Utc::now();
+        if let Some(disposition) = unit.autonomy_disposition.as_mut() {
+            disposition.verify = VerifyPosture::Deferred;
+        }
+        refresh_autonomy_disposition(&mut unit);
         unit.to_file(&unit_path)
             .with_context(|| format!("Failed to save unit: {}", id))?;
         rebuild_index(mana_dir)?;
@@ -369,6 +373,14 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
             let current_hash = format!("{:x}", hasher.finalize());
             if current_hash != *stored_hash {
                 if !opts.force {
+                    if let Some(disposition) = unit.autonomy_disposition.as_mut() {
+                        disposition.verify = VerifyPosture::FrozenViolation;
+                    }
+                    refresh_autonomy_disposition(&mut unit);
+                    unit.updated_at = Utc::now();
+                    unit.to_file(&unit_path)
+                        .with_context(|| format!("Failed to save unit: {}", id))?;
+                    rebuild_index(mana_dir)?;
                     return Ok(CloseOutcome::VerifyFrozenViolation {
                         unit_id: id.to_string(),
                         warnings,
@@ -498,6 +510,7 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
 
             // Capture stdout as unit outputs
             capture_verify_outputs(&mut unit, &verify_result.stdout);
+            refresh_autonomy_disposition(&mut unit);
         }
     }
 
@@ -554,6 +567,8 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
     if unit.unit_type == "fact" {
         unit.last_verified = Some(now);
     }
+
+    refresh_autonomy_disposition(&mut unit);
 
     unit.to_file(&unit_path)
         .with_context(|| format!("Failed to save unit: {}", id))?;
@@ -1067,42 +1082,15 @@ fn record_failure_on_unit(unit: &mut Unit, failure: &VerifyFailure) {
         output_snippet,
         autonomy_observation: None,
     });
-    refresh_attempt_pressure(unit);
+    refresh_autonomy_disposition(unit);
+}
+
+fn refresh_autonomy_disposition(unit: &mut Unit) {
+    unit.refresh_autonomy_disposition();
 }
 
 fn refresh_attempt_pressure(unit: &mut Unit) {
-    let evaluation = crate::unit::derive_attempt_pressure(
-        unit.attempts,
-        unit.max_attempts,
-        unit.on_fail.as_ref(),
-        &unit.labels,
-        &unit.attempt_log,
-        &unit.history,
-    );
-
-    let mut disposition = unit.autonomy_disposition.clone().unwrap_or_else(AutonomyDisposition::unknown);
-    disposition.attempt_pressure = evaluation.pressure;
-    disposition.continuation_budget = evaluation.continuation_budget;
-    disposition.provenance = match disposition.provenance {
-        AutonomyProvenance::Unknown => AutonomyProvenance::AttemptObservation,
-        AutonomyProvenance::AttemptObservation => AutonomyProvenance::AttemptObservation,
-        _ => AutonomyProvenance::Mixed,
-    };
-
-    disposition
-        .blockers
-        .retain(|blocker| !matches!(
-            blocker,
-            crate::unit::AutonomyBlockerCode::AttemptBudgetExhausted
-                | crate::unit::AutonomyBlockerCode::CircuitBreakerTripped
-        ));
-    for blocker in evaluation.blockers {
-        if !disposition.blockers.contains(&blocker) {
-            disposition.blockers.push(blocker);
-        }
-    }
-
-    unit.autonomy_disposition = Some(disposition);
+    refresh_autonomy_disposition(unit);
 }
 
 /// Capture verify stdout as unit outputs.
@@ -1473,6 +1461,7 @@ fn rebuild_index(mana_dir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::unit::{AutonomyBlockerCode, VerifyPosture};
     use crate::config::{Config, DEFAULT_COMMIT_TEMPLATE};
     use std::fs;
     use tempfile::TempDir;
@@ -2327,6 +2316,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(saved.status, Status::AwaitingVerify);
+        let disposition = saved
+            .autonomy_disposition
+            .expect("deferred verify should persist autonomy disposition");
+        assert_eq!(disposition.verify, VerifyPosture::Deferred);
+        assert!(disposition
+            .blockers
+            .contains(&AutonomyBlockerCode::VerifyDeferred));
         // No verify was run — attempts counter stays at 0.
         assert_eq!(saved.attempts, 0);
     }
@@ -2358,8 +2354,44 @@ mod tests {
         }
     }
 
-    /// Without defer_verify, the normal close lifecycle runs: a failing verify
-    /// returns VerifyFailed, not DeferredVerify.
+    #[test]
+    fn close_verify_frozen_violation_persists_autonomy_gate() {
+        let (_dir, mana_dir) = setup_mana_dir();
+        let mut unit = Unit::new("1", "Frozen verify");
+        unit.verify = Some("true".to_string());
+        let mut hasher = Sha256::new();
+        hasher.update("false".as_bytes());
+        unit.verify_hash = Some(format!("{:x}", hasher.finalize()));
+        write_unit(&mana_dir, &unit);
+
+        let outcome = close(
+            &mana_dir,
+            "1",
+            CloseOpts {
+                reason: None,
+                force: false,
+                defer_verify: false,
+            },
+        )
+        .unwrap();
+
+        match outcome {
+            CloseOutcome::VerifyFrozenViolation { unit_id, .. } => {
+                assert_eq!(unit_id, "1");
+            }
+            other => panic!("Expected VerifyFrozenViolation outcome, got {:?}", other),
+        }
+
+        let saved = Unit::from_file(find_unit_file(&mana_dir, "1").unwrap()).unwrap();
+        let disposition = saved
+            .autonomy_disposition
+            .expect("frozen violation should persist autonomy disposition");
+        assert_eq!(disposition.verify, VerifyPosture::FrozenViolation);
+        assert!(disposition
+            .blockers
+            .contains(&AutonomyBlockerCode::VerifyFrozenViolation));
+    }
+
     #[test]
     fn close_defer_normal_unchanged() {
         let (_dir, mana_dir) = setup_mana_dir();
@@ -2382,6 +2414,14 @@ mod tests {
             CloseOutcome::VerifyFailed(r) => {
                 assert_eq!(r.unit.status, Status::Open);
                 assert_eq!(r.unit.attempts, 1);
+                let disposition = r
+                    .unit
+                    .autonomy_disposition
+                    .expect("verify failure should persist autonomy disposition");
+                assert_eq!(disposition.verify, VerifyPosture::Failed);
+                assert!(disposition
+                    .blockers
+                    .contains(&AutonomyBlockerCode::VerifyFailed));
             }
             other => panic!("Expected VerifyFailed outcome, got {:?}", other),
         }

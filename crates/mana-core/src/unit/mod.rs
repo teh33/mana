@@ -44,6 +44,7 @@ use std::path::Path;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::util::{atomic_write, validate_unit_id};
 
@@ -511,6 +512,12 @@ impl<'de> Deserialize<'de> for Unit {
 }
 
 impl Unit {
+    fn push_unique_blocker(blockers: &mut Vec<AutonomyBlockerCode>, blocker: AutonomyBlockerCode) {
+        if !blockers.contains(&blocker) {
+            blockers.push(blocker);
+        }
+    }
+
     /// Create a new unit with sensible defaults.
     /// Returns an error if the ID is invalid.
     pub fn try_new(id: impl Into<String>, title: impl Into<String>) -> Result<Self> {
@@ -572,6 +579,225 @@ impl Unit {
     /// Panics if the ID is invalid. Prefer `try_new` for fallible construction.
     pub fn new(id: impl Into<String>, title: impl Into<String>) -> Self {
         Self::try_new(id, title).expect("Invalid unit ID")
+    }
+
+    /// Recompute the scheduler-facing autonomy disposition from current durable unit state.
+    pub fn refresh_autonomy_disposition(&mut self) {
+        let evaluation = derive_attempt_pressure(
+            self.attempts,
+            self.max_attempts,
+            self.on_fail.as_ref(),
+            &self.labels,
+            &self.attempt_log,
+            &self.history,
+        );
+
+        let prior = self
+            .autonomy_disposition
+            .clone()
+            .unwrap_or_else(AutonomyDisposition::unknown);
+
+        let review = self.derive_review_state(&prior);
+        let approval = self.derive_approval_state(&prior);
+        let verify = self.derive_verify_posture(&prior);
+        let visibility = prior.visibility;
+        let risk = prior.risk;
+
+        let mut blockers = prior.blockers;
+        blockers.retain(|blocker| {
+            !matches!(
+                blocker,
+                AutonomyBlockerCode::HumanCloseRequired
+                    | AutonomyBlockerCode::ApprovalRequired
+                    | AutonomyBlockerCode::ReviewRequired
+                    | AutonomyBlockerCode::ReviewPending
+                    | AutonomyBlockerCode::ReviewRejected
+                    | AutonomyBlockerCode::VerifyAbsent
+                    | AutonomyBlockerCode::VerifyDeferred
+                    | AutonomyBlockerCode::VerifyFailed
+                    | AutonomyBlockerCode::VerifyFrozenViolation
+                    | AutonomyBlockerCode::VerifyQualityUnknown
+                    | AutonomyBlockerCode::VisibilityMissing
+                    | AutonomyBlockerCode::AttemptBudgetExhausted
+                    | AutonomyBlockerCode::CircuitBreakerTripped
+            )
+        });
+
+        if self.requires_human_close() {
+            Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::HumanCloseRequired);
+        }
+
+        match review {
+            ReviewState::Required => {
+                Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::ReviewRequired)
+            }
+            ReviewState::Pending => {
+                Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::ReviewPending)
+            }
+            ReviewState::Rejected => {
+                Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::ReviewRejected)
+            }
+            ReviewState::Unknown | ReviewState::NotRequired | ReviewState::Approved => {}
+        }
+
+        match approval {
+            ApprovalState::Required | ApprovalState::Pending | ApprovalState::Rejected => {
+                Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::ApprovalRequired)
+            }
+            ApprovalState::Unknown | ApprovalState::NotRequired | ApprovalState::Approved => {}
+        }
+
+        match verify {
+            VerifyPosture::Absent => {
+                Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::VerifyAbsent)
+            }
+            VerifyPosture::Deferred => {
+                Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::VerifyDeferred)
+            }
+            VerifyPosture::Failed => {
+                Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::VerifyFailed)
+            }
+            VerifyPosture::FrozenViolation => {
+                Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::VerifyFrozenViolation)
+            }
+            VerifyPosture::Weak | VerifyPosture::Unknown => {
+                if self.verify_requires_quality_blocker(verify) {
+                    Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::VerifyQualityUnknown)
+                }
+            }
+            VerifyPosture::NotApplicable | VerifyPosture::Satisfied => {}
+        }
+
+        if visibility == VisibilityState::Missing {
+            Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::VisibilityMissing);
+        }
+
+        for blocker in evaluation.blockers {
+            Self::push_unique_blocker(&mut blockers, blocker);
+        }
+
+        let kind = if blockers.contains(&AutonomyBlockerCode::HumanCloseRequired) {
+            AutonomyDispositionKind::RequiresHuman
+        } else if blockers.is_empty() {
+            AutonomyDispositionKind::Eligible
+        } else {
+            AutonomyDispositionKind::Blocked
+        };
+
+        let provenance = if review != ReviewState::Unknown
+            || approval != ApprovalState::Unknown
+            || verify != VerifyPosture::Unknown
+            || visibility != VisibilityState::Unknown
+            || risk != RiskBand::Unknown
+        {
+            match prior.provenance {
+                AutonomyProvenance::Unknown | AutonomyProvenance::AttemptObservation => {
+                    AutonomyProvenance::Mixed
+                }
+                existing => existing,
+            }
+        } else {
+            match prior.provenance {
+                AutonomyProvenance::Unknown => AutonomyProvenance::AttemptObservation,
+                existing => existing,
+            }
+        };
+
+        self.autonomy_disposition = Some(AutonomyDisposition {
+            kind,
+            blockers,
+            review,
+            approval,
+            verify,
+            visibility,
+            attempt_pressure: evaluation.pressure,
+            risk,
+            provenance,
+            continuation_budget: evaluation.continuation_budget,
+        });
+    }
+
+    fn derive_review_state(&self, prior: &AutonomyDisposition) -> ReviewState {
+        if self.labels.iter().any(|label| label == "reviewed") {
+            ReviewState::Approved
+        } else if self.labels.iter().any(|label| label == "rejected") {
+            ReviewState::Rejected
+        } else if self.labels.iter().any(|label| label == "needs-human-review") {
+            ReviewState::Pending
+        } else if self.labels.iter().any(|label| label == "review-failed") {
+            if self.status == Status::Open {
+                ReviewState::Pending
+            } else {
+                ReviewState::Rejected
+            }
+        } else if !matches!(prior.review, ReviewState::Unknown) {
+            prior.review
+        } else {
+            ReviewState::Unknown
+        }
+    }
+
+    fn derive_approval_state(&self, prior: &AutonomyDisposition) -> ApprovalState {
+        if !matches!(prior.approval, ApprovalState::Unknown) {
+            prior.approval
+        } else {
+            ApprovalState::Unknown
+        }
+    }
+
+    fn derive_verify_posture(&self, prior: &AutonomyDisposition) -> VerifyPosture {
+        let has_verify = self
+            .verify
+            .as_ref()
+            .is_some_and(|verify| !verify.trim().is_empty());
+
+        if self.is_epic_like() && !has_verify {
+            return VerifyPosture::NotApplicable;
+        }
+
+        if !has_verify {
+            return VerifyPosture::Absent;
+        }
+
+        if self.verify_hash_mismatch() {
+            return VerifyPosture::FrozenViolation;
+        }
+
+        if self.status == Status::AwaitingVerify {
+            return VerifyPosture::Deferred;
+        }
+
+        if let Some(last_run) = self.history.last() {
+            match last_run.result {
+                RunResult::Pass => return VerifyPosture::Satisfied,
+                RunResult::Fail | RunResult::Timeout => return VerifyPosture::Failed,
+                RunResult::Cancelled => {}
+            }
+        }
+
+        if matches!(prior.verify, VerifyPosture::FrozenViolation) && self.verify_hash_mismatch() {
+            return VerifyPosture::FrozenViolation;
+        }
+
+        VerifyPosture::Weak
+    }
+
+    fn verify_hash_mismatch(&self) -> bool {
+        let (Some(stored_hash), Some(verify_cmd)) = (&self.verify_hash, &self.verify) else {
+            return false;
+        };
+        if verify_cmd.trim().is_empty() {
+            return false;
+        }
+
+        let mut hasher = Sha256::new();
+        hasher.update(verify_cmd.as_bytes());
+        let current_hash = format!("{:x}", hasher.finalize());
+        current_hash != *stored_hash
+    }
+
+    fn verify_requires_quality_blocker(&self, posture: VerifyPosture) -> bool {
+        !self.is_epic_like() && matches!(posture, VerifyPosture::Weak | VerifyPosture::Unknown)
     }
 
     /// Get effective max_loops (per-unit override or config default).

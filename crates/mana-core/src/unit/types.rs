@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 // Status
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Open,
@@ -41,7 +41,7 @@ pub enum AutonomyDispositionKind {
 }
 
 /// Typed blocker codes explaining why a unit is not autonomously eligible.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutonomyBlockerCode {
     UnresolvedDecision,
@@ -72,6 +72,12 @@ pub enum ApprovalState {
     Pending,
     Approved,
     Rejected,
+}
+
+impl Default for ApprovalState {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 /// Current review posture for autonomy gating.
@@ -151,6 +157,7 @@ pub struct AutonomyDisposition {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blockers: Vec<AutonomyBlockerCode>,
     pub review: ReviewState,
+    #[serde(default)]
     pub approval: ApprovalState,
     pub verify: VerifyPosture,
     pub visibility: VisibilityState,
