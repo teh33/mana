@@ -36,6 +36,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::unit::{Status, Unit, UnitKind};
 use crate::util::{atomic_write, natural_cmp};
+use crate::yaml;
 
 // ---------------------------------------------------------------------------
 // IndexEntry
@@ -317,7 +318,7 @@ impl Index {
         let contents = fs::read_to_string(&index_path)
             .with_context(|| format!("Failed to read {}", index_path.display()))?;
         let index: Index =
-            serde_yml::from_str(&contents).with_context(|| "Failed to parse index.yaml")?;
+            yaml::from_str(&contents).with_context(|| "Failed to parse index.yaml")?;
         Ok(index)
     }
 
@@ -348,7 +349,8 @@ impl Index {
     }
 
     /// Recursively walk archive directory and collect unit entries.
-    /// Uses catch_unwind to survive YAML parser panics from corrupt files.
+    /// Unit::from_file now guards against YAML parser panics from corrupt files,
+    /// so normal Result handling is enough here.
     fn walk_archive_dir(dir: &Path, entries: &mut Vec<IndexEntry>) -> Result<()> {
         use crate::unit::Unit;
 
@@ -365,17 +367,9 @@ impl Index {
             } else if path.is_file() {
                 if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
                     if is_unit_filename(filename) {
-                        let path_clone = path.clone();
-                        let result = std::panic::catch_unwind(|| Unit::from_file(&path_clone));
-                        match result {
-                            Ok(Ok(unit)) => entries.push(IndexEntry::from(&unit)),
-                            Ok(Err(_)) => {} // normal parse error, skip silently
-                            Err(_) => {
-                                eprintln!(
-                                    "warning: skipping corrupt archive file (parser panic): {}",
-                                    path.display()
-                                );
-                            }
+                        match Unit::from_file(&path) {
+                            Ok(unit) => entries.push(IndexEntry::from(&unit)),
+                            Err(_) => {} // parse error or guarded parser panic, skip silently
                         }
                     }
                 }
@@ -411,7 +405,7 @@ impl ArchiveIndex {
         let contents = fs::read_to_string(&path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
         let index: ArchiveIndex =
-            serde_yml::from_str(&contents).with_context(|| "Failed to parse archive.yaml")?;
+            yaml::from_str(&contents).with_context(|| "Failed to parse archive.yaml")?;
         Ok(index)
     }
 

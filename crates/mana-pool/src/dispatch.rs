@@ -61,11 +61,7 @@ where
     results
 }
 
-fn apply_verify_failure(
-    results: &mut [AgentResult],
-    unit_id: &str,
-    message: &str,
-) -> bool {
+fn apply_verify_failure(results: &mut [AgentResult], unit_id: &str, message: &str) -> bool {
     if let Some(result) = results.iter_mut().find(|result| result.unit_id == unit_id) {
         result.success = false;
         result.error.get_or_insert_with(|| message.to_string());
@@ -135,7 +131,11 @@ pub fn execute_deferred_verify(
 
     let successful_units: Vec<DispatchUnit> = units
         .iter()
-        .filter(|unit| results.iter().any(|result| result.unit_id == unit.id && result.success))
+        .filter(|unit| {
+            results
+                .iter()
+                .any(|result| result.unit_id == unit.id && result.success)
+        })
         .cloned()
         .collect();
     if successful_units.is_empty() {
@@ -150,7 +150,11 @@ pub fn execute_deferred_verify(
     let fast_groups = group_verify_commands(
         &successful_units
             .iter()
-            .filter(|unit| unit.verify_fast.as_ref().is_some_and(|cmd| !cmd.trim().is_empty()))
+            .filter(|unit| {
+                unit.verify_fast
+                    .as_ref()
+                    .is_some_and(|cmd| !cmd.trim().is_empty())
+            })
             .map(|unit| DispatchUnit {
                 verify_command: unit.verify_fast.clone(),
                 ..unit.clone()
@@ -168,7 +172,9 @@ pub fn execute_deferred_verify(
         &successful_units
             .iter()
             .filter(|unit| {
-                unit.verify_command.as_ref().is_some_and(|cmd| !cmd.trim().is_empty())
+                unit.verify_command
+                    .as_ref()
+                    .is_some_and(|cmd| !cmd.trim().is_empty())
                     && fast_results.get(&unit.id) != Some(&false)
             })
             .cloned()
@@ -333,11 +339,9 @@ fn finalize_completed_result(
 
     if result.success {
         let commit_message = format!("feat(unit-{}): {}", result.unit_id, result.title);
-        let merge_result = mana_core::worktree::commit_worktree_changes(
-            &worktree.worktree_path,
-            &commit_message,
-        )
-        .and_then(|_| mana_core::worktree::merge_to_main(&worktree, &result.unit_id));
+        let merge_result =
+            mana_core::worktree::commit_worktree_changes(&worktree.worktree_path, &commit_message)
+                .and_then(|_| mana_core::worktree::merge_to_main(&worktree, &result.unit_id));
 
         match merge_result {
             Ok(MergeResult::Success) | Ok(MergeResult::NothingToCommit) => {
@@ -365,7 +369,6 @@ fn finalize_completed_result(
 
     result
 }
-
 
 /// Run a full dispatch cycle: schedule units respecting dependencies, concurrency,
 /// and memory limits. Spawns agents via the provided `Spawner` implementation.
@@ -587,8 +590,7 @@ fn run_dispatch_with_options(
                 if shutdown() {
                     // Drain remaining results without spawning more
                     while running_count > 0 {
-                        if let Ok(r) = result_rx.recv_timeout(poll_interval)
-                        {
+                        if let Ok(r) = result_rx.recv_timeout(poll_interval) {
                             running_count -= 1;
                             let r = finalize_completed_result(
                                 config,
@@ -601,14 +603,7 @@ fn run_dispatch_with_options(
                             results.push(r);
                         }
                     }
-                    return finish_dispatch(
-                        config,
-                        units,
-                        results,
-                        true,
-                        event_tx,
-                        started,
-                    );
+                    return finish_dispatch(config, units, results, true, event_tx, started);
                 }
                 drain_progress_events(
                     &progress_rx,
@@ -627,12 +622,7 @@ fn run_dispatch_with_options(
                     Err(mpsc::RecvTimeoutError::Timeout) => continue,
                     Err(mpsc::RecvTimeoutError::Disconnected) => {
                         return finish_dispatch(
-                            config,
-                            units,
-                            results,
-                            any_failed,
-                            event_tx,
-                            started,
+                            config, units, results, any_failed, event_tx, started,
                         );
                     }
                 }
@@ -684,14 +674,7 @@ fn run_dispatch_with_options(
                             results.push(r);
                         }
                     }
-                    return finish_dispatch(
-                        config,
-                        units,
-                        results,
-                        true,
-                        event_tx,
-                        started,
-                    );
+                    return finish_dispatch(config, units, results, true, event_tx, started);
                 }
             }
 
@@ -727,14 +710,7 @@ fn run_dispatch_with_options(
         results.push(result);
     }
 
-    return finish_dispatch(
-        config,
-        units,
-        results,
-        any_failed,
-        event_tx,
-        started,
-    );
+    return finish_dispatch(config, units, results, any_failed, event_tx, started);
 }
 
 /// Check if a unit's dependencies are satisfied.
@@ -963,7 +939,11 @@ mod tests {
         run(&["config", "user.email", "mana-pool-tests@example.com"]);
         fs::create_dir_all(path.join(".mana")).unwrap();
         fs::write(path.join("README.md"), "root\n").unwrap();
-        fs::write(path.join(".mana/config.yaml"), "project: test\nnext_id: 1\n").unwrap();
+        fs::write(
+            path.join(".mana/config.yaml"),
+            "project: test\nnext_id: 1\n",
+        )
+        .unwrap();
         run(&["add", "."]);
         run(&["commit", "-m", "init"]);
     }
@@ -1081,7 +1061,6 @@ mod tests {
         )));
     }
 
-
     #[test]
     fn dedup_verify_run_dispatch_marks_shared_failures() {
         struct SuccessSpawner;
@@ -1165,12 +1144,14 @@ mod tests {
             .as_deref()
             .unwrap()
             .contains("verify failed"));
-        assert!(outcome
-            .results
-            .iter()
-            .find(|result| result.unit_id == "3")
-            .unwrap()
-            .success);
+        assert!(
+            outcome
+                .results
+                .iter()
+                .find(|result| result.unit_id == "3")
+                .unwrap()
+                .success
+        );
 
         let events: Vec<PoolEvent> = event_rx.try_iter().collect();
         let verify_events: Vec<(String, Vec<String>, bool)> = events
@@ -1243,10 +1224,17 @@ mod tests {
         .unwrap();
 
         assert!(outcome.any_failed);
-        let result = outcome.results.iter().find(|result| result.unit_id == "1").unwrap();
+        let result = outcome
+            .results
+            .iter()
+            .find(|result| result.unit_id == "1")
+            .unwrap();
         assert!(!result.success);
         assert_eq!(result.error.as_deref(), Some("fast verify failed"));
-        assert!(!sentinel.exists(), "full verify should be skipped after fast verify failure");
+        assert!(
+            !sentinel.exists(),
+            "full verify should be skipped after fast verify failure"
+        );
 
         let events: Vec<PoolEvent> = event_rx.try_iter().collect();
         let verify_events: Vec<(String, Vec<String>, bool)> = events
@@ -1318,10 +1306,20 @@ mod tests {
         .unwrap();
 
         assert!(!outcome.any_failed);
-        let result = outcome.results.iter().find(|result| result.unit_id == "1").unwrap();
+        let result = outcome
+            .results
+            .iter()
+            .find(|result| result.unit_id == "1")
+            .unwrap();
         assert!(result.success);
-        assert!(fast_marker.exists(), "fast verify should run before full verify");
-        assert!(full_marker.exists(), "full verify should run after fast verify passes");
+        assert!(
+            fast_marker.exists(),
+            "fast verify should run before full verify"
+        );
+        assert!(
+            full_marker.exists(),
+            "full verify should run after fast verify passes"
+        );
 
         let events: Vec<PoolEvent> = event_rx.try_iter().collect();
         let verify_events: Vec<(String, Vec<String>, bool)> = events
@@ -1336,8 +1334,14 @@ mod tests {
             })
             .collect();
         assert_eq!(verify_events.len(), 2);
-        assert_eq!(verify_events[0].0, format!("touch {}", fast_marker.display()));
-        assert_eq!(verify_events[1].0, format!("touch {}", full_marker.display()));
+        assert_eq!(
+            verify_events[0].0,
+            format!("touch {}", fast_marker.display())
+        );
+        assert_eq!(
+            verify_events[1].0,
+            format!("touch {}", full_marker.display())
+        );
         assert!(verify_events[0].2);
         assert!(verify_events[1].2);
     }
@@ -1391,9 +1395,16 @@ mod tests {
         .unwrap();
 
         assert!(!outcome.any_failed);
-        let result = outcome.results.iter().find(|result| result.unit_id == "1").unwrap();
+        let result = outcome
+            .results
+            .iter()
+            .find(|result| result.unit_id == "1")
+            .unwrap();
         assert!(result.success);
-        assert!(full_marker.exists(), "full verify should run directly when no fast verify is configured");
+        assert!(
+            full_marker.exists(),
+            "full verify should run directly when no fast verify is configured"
+        );
 
         let events: Vec<PoolEvent> = event_rx.try_iter().collect();
         let verify_events: Vec<(String, Vec<String>, bool)> = events
@@ -1408,7 +1419,10 @@ mod tests {
             })
             .collect();
         assert_eq!(verify_events.len(), 1);
-        assert_eq!(verify_events[0].0, format!("touch {}", full_marker.display()));
+        assert_eq!(
+            verify_events[0].0,
+            format!("touch {}", full_marker.display())
+        );
         assert!(verify_events[0].2);
     }
 
@@ -1954,7 +1968,9 @@ mod tests {
                 _progress_tx: Option<mpsc::Sender<(String, AgentProgress)>>,
             ) -> AgentResult {
                 assert_ne!(config.repo_path, self.expected_root);
-                assert!(config.repo_path.starts_with(self.expected_root.join(".mana/worktrees")));
+                assert!(config
+                    .repo_path
+                    .starts_with(self.expected_root.join(".mana/worktrees")));
                 assert_eq!(config.mana_dir, config.repo_path.join(".mana"));
                 assert!(config.repo_path.join(".git").exists());
                 AgentResult {
@@ -2038,7 +2054,10 @@ mod tests {
 
         assert!(outcome.any_failed);
         let worktree_path = seen_repo.lock().unwrap().clone().unwrap();
-        assert!(!worktree_path.exists(), "failed worktree should be cleaned up");
+        assert!(
+            !worktree_path.exists(),
+            "failed worktree should be cleaned up"
+        );
     }
 
     #[test]

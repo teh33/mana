@@ -74,3 +74,4 @@ pub mod unit;
 pub mod util;
 pub mod verify_lint;
 pub mod worktree;
+pub mod yaml;

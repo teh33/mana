@@ -274,7 +274,10 @@ pub fn summarize_child_units(mana_dir: &Path, parent_id: &str) -> Vec<ChildSumma
                 id: entry.id,
                 title: entry.title,
                 status: entry.status.to_string(),
-                attempts: full_unit.as_ref().map(|unit| unit.attempt_log.len()).unwrap_or(0),
+                attempts: full_unit
+                    .as_ref()
+                    .map(|unit| unit.attempt_log.len())
+                    .unwrap_or(0),
                 recent_outcome,
                 summary,
                 follow_up,

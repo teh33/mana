@@ -6,8 +6,8 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::{diff, risk, state};
 use crate::types::{FileChange, QueueEntry};
+use crate::{diff, risk, state};
 
 /// Build the review queue from the current `.mana/` state.
 ///
@@ -160,7 +160,10 @@ mod tests {
     fn init_git_repo(project_root: &Path) {
         git(project_root, &["init"]);
         git(project_root, &["config", "user.name", "Mana Review Tests"]);
-        git(project_root, &["config", "user.email", "mana-review-tests@example.com"]);
+        git(
+            project_root,
+            &["config", "user.email", "mana-review-tests@example.com"],
+        );
     }
 
     fn commit_all(project_root: &Path, message: &str) -> String {

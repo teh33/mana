@@ -43,6 +43,8 @@ use std::process::Command;
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::yaml;
+
 pub const DEFAULT_COMMIT_TEMPLATE: &str = "feat(unit-{id}): {title}";
 
 /// Notification configuration for human-facing alerts.
@@ -317,7 +319,7 @@ impl Config {
         let path = mana_dir.join("config.yaml");
         let contents = fs::read_to_string(&path)
             .with_context(|| format!("Failed to read config at {}", path.display()))?;
-        let config: Config = serde_yml::from_str(&contents)
+        let config: Config = yaml::from_str(&contents)
             .with_context(|| format!("Failed to parse config at {}", path.display()))?;
         Ok(config)
     }
@@ -348,7 +350,7 @@ impl Config {
             let contents = fs::read_to_string(&canonical).with_context(|| {
                 format!("Failed to read extends config: {}", canonical.display())
             })?;
-            let parent: Config = serde_yml::from_str(&contents).with_context(|| {
+            let parent: Config = yaml::from_str(&contents).with_context(|| {
                 format!("Failed to parse extends config: {}", canonical.display())
             })?;
 
@@ -547,7 +549,7 @@ impl GlobalConfig {
         if path.exists() {
             let contents = fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read global config at {}", path.display()))?;
-            let config: GlobalConfig = serde_yml::from_str(&contents)
+            let config: GlobalConfig = yaml::from_str(&contents)
                 .with_context(|| format!("Failed to parse global config at {}", path.display()))?;
             return Ok(config);
         }
@@ -561,7 +563,7 @@ impl GlobalConfig {
                         legacy.display()
                     )
                 })?;
-                let config: GlobalConfig = serde_yml::from_str(&contents).with_context(|| {
+                let config: GlobalConfig = yaml::from_str(&contents).with_context(|| {
                     format!(
                         "Failed to parse legacy global config at {}",
                         legacy.display()

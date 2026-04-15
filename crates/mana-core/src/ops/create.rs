@@ -362,9 +362,7 @@ pub mod tests {
 
         let mut existing = Unit::new("5", "Existing");
         existing.slug = Some("existing".into());
-        existing
-            .to_file(bd.join("5-existing.md"))
-            .unwrap();
+        existing.to_file(bd.join("5-existing.md")).unwrap();
 
         let mut config = Config::load(&bd).unwrap();
         config.next_id = 3;

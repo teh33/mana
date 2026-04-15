@@ -646,7 +646,9 @@ impl ApprovalRecord {
         }
 
         if self.gate_policy_ref != self.provenance.gate_policy_ref {
-            return Err("approval gate_policy_ref must match provenance.gate_policy_ref".to_string());
+            return Err(
+                "approval gate_policy_ref must match provenance.gate_policy_ref".to_string(),
+            );
         }
 
         if self.review_gate_outcome != self.provenance.review_gate_outcome {
@@ -954,14 +956,8 @@ mod tests {
 
     #[test]
     fn derive_attempt_pressure_trips_from_circuit_breaker_label() {
-        let evaluation = derive_attempt_pressure(
-            1,
-            5,
-            None,
-            &["circuit-breaker".to_string()],
-            &[],
-            &[],
-        );
+        let evaluation =
+            derive_attempt_pressure(1, 5, None, &["circuit-breaker".to_string()], &[], &[]);
 
         assert_eq!(evaluation.pressure, AttemptPressure::CircuitBreakerTripped);
         assert_eq!(evaluation.continuation_budget, Some(0));
@@ -1299,8 +1295,7 @@ mod tests {
             diff_scope_ref: Some("close-evidence:run-3".to_string()),
             review_refs: vec!["review:run-3".to_string()],
             review_decision_refs: vec!["review-decision:approved".to_string()],
-            basis: "mandatory skeptical review completed and evidence satisfied gate"
-                .to_string(),
+            basis: "mandatory skeptical review completed and evidence satisfied gate".to_string(),
             provenance: ApprovalProvenance {
                 unit_id: "45.8".to_string(),
                 attempt: Some(3),

@@ -491,7 +491,6 @@ fn build_imp_command(
     cmd
 }
 
-
 /// Run a single unit by spawning the direct-mode agent.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run_single_direct(
@@ -925,7 +924,9 @@ mod tests {
         assert!(args.windows(2).any(|w| w == ["--model", "gpt-5.4"]));
         assert!(args.windows(2).any(|w| w == ["--mode", "json"]));
         assert!(args.windows(2).any(|w| w == ["run", "1.2"]));
-        assert!(args.windows(2).any(|w| w == ["--mana-dir", "/tmp/project/.mana"]));
+        assert!(args
+            .windows(2)
+            .any(|w| w == ["--mana-dir", "/tmp/project/.mana"]));
         assert!(args.iter().any(|arg| arg == "--defer-verify"));
     }
 
@@ -946,7 +947,9 @@ mod tests {
 
         assert!(!args.iter().any(|arg| arg == "--model"));
         assert!(args.windows(2).any(|w| w == ["run", "7"]));
-        assert!(args.windows(2).any(|w| w == ["--mana-dir", "/tmp/project/.mana"]));
+        assert!(args
+            .windows(2)
+            .any(|w| w == ["--mana-dir", "/tmp/project/.mana"]));
     }
 
     fn make_sized_unit(
@@ -1115,7 +1118,9 @@ mod tests {
         assert!(result.is_ok());
         let prompt = result.unwrap();
         assert!(prompt.system_prompt.contains("Unit Assignment"));
-        assert!(prompt.user_message.contains("configured runtime/close path for unit 1"));
+        assert!(prompt
+            .user_message
+            .contains("configured runtime/close path for unit 1"));
     }
 
     #[test]

@@ -47,6 +47,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::util::{atomic_write, validate_unit_id};
+use crate::yaml;
 
 pub mod types;
 pub use types::*;
@@ -662,7 +663,10 @@ impl Unit {
             }
             VerifyPosture::Weak | VerifyPosture::Unknown => {
                 if self.verify_requires_quality_blocker(verify) {
-                    Self::push_unique_blocker(&mut blockers, AutonomyBlockerCode::VerifyQualityUnknown)
+                    Self::push_unique_blocker(
+                        &mut blockers,
+                        AutonomyBlockerCode::VerifyQualityUnknown,
+                    )
                 }
             }
             VerifyPosture::NotApplicable | VerifyPosture::Satisfied => {}
@@ -722,7 +726,11 @@ impl Unit {
             ReviewState::Approved
         } else if self.labels.iter().any(|label| label == "rejected") {
             ReviewState::Rejected
-        } else if self.labels.iter().any(|label| label == "needs-human-review") {
+        } else if self
+            .labels
+            .iter()
+            .any(|label| label == "needs-human-review")
+        {
             ReviewState::Pending
         } else if self.labels.iter().any(|label| label == "review-failed") {
             if self.status == Status::Open {
@@ -883,7 +891,7 @@ impl Unit {
         match Self::parse_frontmatter(content) {
             Ok((frontmatter, body)) => {
                 // Parse frontmatter as YAML
-                let mut unit: Unit = serde_yml::from_str(&frontmatter)?;
+                let mut unit: Unit = yaml::from_str(&frontmatter)?;
 
                 // If there's a body and no description yet, set it
                 if let Some(markdown_body) = body {
@@ -896,7 +904,7 @@ impl Unit {
             }
             Err(_) => {
                 // Fallback: treat entire content as YAML
-                let unit: Unit = serde_yml::from_str(content)?;
+                let unit: Unit = yaml::from_str(content)?;
                 Ok(unit)
             }
         }
@@ -1003,9 +1011,7 @@ impl Unit {
             "stale_after" => self.stale_after = serde_json::from_str(json_value)?,
             "paths" => self.paths = serde_json::from_str(json_value)?,
             "decisions" => self.decisions = serde_json::from_str(json_value)?,
-            "autonomy_disposition" => {
-                self.autonomy_disposition = serde_json::from_str(json_value)?
-            },
+            "autonomy_disposition" => self.autonomy_disposition = serde_json::from_str(json_value)?,
             "model" => self.model = serde_json::from_str(json_value)?,
             _ => return Err(anyhow::anyhow!("Unknown field: {}", field)),
         }
@@ -1576,6 +1582,12 @@ status: open
 "#;
         let result = Unit::from_string(bad_content);
         // Should fail because no closing ---
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parser_panic_surfaces_as_error_for_invalid_yaml_input() {
+        let result = Unit::from_string("title: [unterminated");
         assert!(result.is_err());
     }
 

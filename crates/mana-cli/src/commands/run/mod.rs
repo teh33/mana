@@ -393,7 +393,6 @@ fn print_pool_batch_verify_result(result: &PoolBatchVerifySummary) {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Signal handling for clean agent shutdown
 // ---------------------------------------------------------------------------
@@ -486,7 +485,9 @@ struct DecisionWarning {
     decisions: Vec<String>,
 }
 
-fn collect_decision_warnings_from_skipped_units(blocked: &[plan::BlockedUnit]) -> Vec<DecisionWarning> {
+fn collect_decision_warnings_from_skipped_units(
+    blocked: &[plan::BlockedUnit],
+) -> Vec<DecisionWarning> {
     let mut warnings: Vec<DecisionWarning> = blocked
         .iter()
         .filter(|blocked| blocked.blocker == Some(AutonomyBlockerCode::UnresolvedDecision))
@@ -668,7 +669,6 @@ fn imp_available() -> bool {
         .unwrap_or(false)
 }
 
-
 /// Single dispatch pass: plan → print/execute → report.
 fn run_once(
     mana_dir: &Path,
@@ -845,8 +845,12 @@ fn run_once(
                         branch_any_failed = true;
                     }
                 } else {
-                    match execute_direct_batch_verify(mana_dir, &plan.all_units, &mut results, &run_cfg)
-                    {
+                    match execute_direct_batch_verify(
+                        mana_dir,
+                        &plan.all_units,
+                        &mut results,
+                        &run_cfg,
+                    ) {
                         Ok((bv, verify_failed)) => {
                             if params.json_stream {
                                 stream::emit(&StreamEvent::BatchVerify {

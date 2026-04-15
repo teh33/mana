@@ -103,5 +103,4 @@ mod tests {
         let (_dir, bd) = setup();
         assert!(get(&bd, "99").is_err());
     }
-
 }

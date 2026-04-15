@@ -1138,7 +1138,9 @@ mod tests {
         assert!(result.system_prompt.contains("---"));
 
         // User message should contain close instruction
-        assert!(result.user_message.contains("configured runtime/close path for unit 1"));
+        assert!(result
+            .user_message
+            .contains("configured runtime/close path for unit 1"));
 
         // File ref should point to the unit file
         assert!(result.file_ref.contains("1-simple-task.md"));
@@ -1159,7 +1161,9 @@ mod tests {
 
         let result = build_agent_prompt(&unit, &options).unwrap();
         assert!(result.user_message.starts_with("Focus on performance"));
-        assert!(result.user_message.contains("configured runtime/close path for unit 1"));
+        assert!(result
+            .user_message
+            .contains("configured runtime/close path for unit 1"));
     }
 
     #[test]

@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use anyhow::Result;
-use mana_core::ops::show as ops_show;
 use mana_core::ops::context::{summarize_child_units, ChildSummary};
+use mana_core::ops::show as ops_show;
 use termimad::MadSkin;
 
 use crate::unit::{RunRecord, Unit};
@@ -116,7 +116,10 @@ fn render_unit(
     if !child_summaries.is_empty() {
         println!("\n**Child Job Summaries**");
         for child in child_summaries {
-            let mut line = format!("- {} [{}] attempts={}", child.id, child.status, child.attempts);
+            let mut line = format!(
+                "- {} [{}] attempts={}",
+                child.id, child.status, child.attempts
+            );
             if let Some(outcome) = &child.recent_outcome {
                 line.push_str(&format!(" recent={}", outcome));
             }

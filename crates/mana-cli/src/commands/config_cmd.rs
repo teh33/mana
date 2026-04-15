@@ -4,6 +4,8 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 use serde_yml::Value;
 
+use mana_core::yaml;
+
 use crate::config::{Config, GlobalConfig, DEFAULT_COMMIT_TEMPLATE};
 
 const CONFIG_KEY_HELP: &str = "Available keys: project, next_id, auto_close_parent, run, plan, research, run_model, plan_model, review_model, research_model, max_loops, max_concurrent, poll_interval, rules_file, file_locking, worktree, auto_commit, batch_verify, verify_timeout, commit_template, on_close, on_fail, memory_reserve_mb, user, user.email";
@@ -633,7 +635,7 @@ fn config_value_source(
 
 fn load_raw_yaml(path: &Path) -> Option<Value> {
     let contents = fs::read_to_string(path).ok()?;
-    serde_yml::from_str(&contents).ok()
+    yaml::from_str(&contents).ok()
 }
 
 fn yaml_lookup_string(raw: &Value, key: &str) -> Option<String> {
@@ -702,6 +704,13 @@ mod tests {
         )
         .unwrap();
         dir
+    }
+
+    #[test]
+    fn load_raw_yaml_returns_none_for_invalid_yaml_instead_of_panicking() {
+        let dir = setup_test_dir();
+        fs::write(dir.path().join("config.yaml"), "title: [unterminated").unwrap();
+        assert!(load_raw_yaml(&dir.path().join("config.yaml")).is_none());
     }
 
     #[test]

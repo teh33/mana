@@ -340,7 +340,6 @@ pub fn compute_ready_queue(
         entries_and_units.push((entry, unit));
     }
 
-
     // Build provisional list (weight = 1), then compute real weights and update
     let mut ready_units: Vec<ReadyUnit> = entries_and_units
         .iter()

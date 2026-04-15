@@ -14,8 +14,7 @@ use crate::hooks::{
 use crate::index::{ArchiveIndex, Index, IndexEntry, LockedIndex};
 use crate::ops::verify::run_verify_command;
 use crate::unit::{
-    AttemptOutcome, OnCloseAction, OnFailAction, RunRecord, RunResult, Status, Unit,
-    VerifyPosture,
+    AttemptOutcome, OnCloseAction, OnFailAction, RunRecord, RunResult, Status, Unit, VerifyPosture,
 };
 use crate::util::title_to_slug;
 
@@ -882,7 +881,10 @@ fn build_pass_output_snippet(
             scope.push_str(", no declared path overlap");
         }
         parts.push(scope);
-    } else if evidence.map(|e| e.only_mana_changes || e.no_path_overlap).unwrap_or(false) {
+    } else if evidence
+        .map(|e| e.only_mana_changes || e.no_path_overlap)
+        .unwrap_or(false)
+    {
         let evidence = evidence.expect("scope flags imply evidence exists");
         let mut scope_flags = Vec::new();
         if evidence.only_mana_changes {
@@ -1461,8 +1463,8 @@ fn rebuild_index(mana_dir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::unit::{AutonomyBlockerCode, VerifyPosture};
     use crate::config::{Config, DEFAULT_COMMIT_TEMPLATE};
+    use crate::unit::{AutonomyBlockerCode, VerifyPosture};
     use std::fs;
     use tempfile::TempDir;
 
@@ -2051,8 +2053,13 @@ mod tests {
         assert_eq!(unit.attempts, 1);
         assert_eq!(unit.history.len(), 1);
         assert_eq!(unit.history[0].result, RunResult::Fail);
-        let disposition = unit.autonomy_disposition.expect("attempt pressure should be derived");
-        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::WithinBudget);
+        let disposition = unit
+            .autonomy_disposition
+            .expect("attempt pressure should be derived");
+        assert_eq!(
+            disposition.attempt_pressure,
+            crate::unit::AttemptPressure::WithinBudget
+        );
         assert_eq!(disposition.continuation_budget, Some(2));
     }
 
@@ -2090,8 +2097,13 @@ mod tests {
         let result = process_on_fail(&mut unit);
         assert!(matches!(result, OnFailActionTaken::Retry { .. }));
         assert!(unit.claimed_by.is_none());
-        let disposition = unit.autonomy_disposition.expect("attempt pressure should be present");
-        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::WithinBudget);
+        let disposition = unit
+            .autonomy_disposition
+            .expect("attempt pressure should be present");
+        assert_eq!(
+            disposition.attempt_pressure,
+            crate::unit::AttemptPressure::WithinBudget
+        );
         assert_eq!(disposition.continuation_budget, Some(4));
     }
 
@@ -2121,8 +2133,13 @@ mod tests {
         assert!(matches!(result, OnFailActionTaken::Escalated));
         assert_eq!(unit.priority, 0);
         assert!(unit.labels.contains(&"escalated".to_string()));
-        let disposition = unit.autonomy_disposition.expect("attempt pressure should be present");
-        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::Exhausted);
+        let disposition = unit
+            .autonomy_disposition
+            .expect("attempt pressure should be present");
+        assert_eq!(
+            disposition.attempt_pressure,
+            crate::unit::AttemptPressure::Exhausted
+        );
         assert!(disposition
             .blockers
             .contains(&crate::unit::AutonomyBlockerCode::AttemptBudgetExhausted));
@@ -2145,8 +2162,13 @@ mod tests {
         let mut unit = Unit::new("1", "Task");
         let result = check_circuit_breaker(&mana_dir, &mut unit, "1", 0).unwrap();
         assert!(!result.tripped);
-        let disposition = unit.autonomy_disposition.expect("attempt pressure should be present");
-        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::WithinBudget);
+        let disposition = unit
+            .autonomy_disposition
+            .expect("attempt pressure should be present");
+        assert_eq!(
+            disposition.attempt_pressure,
+            crate::unit::AttemptPressure::WithinBudget
+        );
         assert_eq!(disposition.continuation_budget, Some(3));
     }
 
@@ -2168,7 +2190,10 @@ mod tests {
         let disposition = loaded_child
             .autonomy_disposition
             .expect("attempt pressure should be present");
-        assert_eq!(disposition.attempt_pressure, crate::unit::AttemptPressure::CircuitBreakerTripped);
+        assert_eq!(
+            disposition.attempt_pressure,
+            crate::unit::AttemptPressure::CircuitBreakerTripped
+        );
         assert!(disposition
             .blockers
             .contains(&crate::unit::AutonomyBlockerCode::CircuitBreakerTripped));

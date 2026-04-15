@@ -306,4 +306,3 @@ mod tests {
         assert!(job_entry.has_verify);
     }
 }
-

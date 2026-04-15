@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::types::Review;
+use mana_core::yaml;
 
 /// Directory within `.mana/` where reviews are stored.
 const REVIEWS_DIR: &str = "reviews";
@@ -43,7 +44,7 @@ pub fn load(mana_dir: &Path, unit_id: &str) -> Result<Option<Review>> {
     }
 
     let content = fs::read_to_string(&path).context("failed to read review file")?;
-    let review: Review = serde_yml::from_str(&content).context("failed to parse review")?;
+    let review: Review = yaml::from_str(&content).context("failed to parse review")?;
 
     Ok(Some(review))
 }
@@ -64,7 +65,7 @@ pub fn load_all(mana_dir: &Path) -> Result<Vec<Review>> {
 
         if path.extension().is_some_and(|ext| ext == "yaml") {
             let content = fs::read_to_string(&path)?;
-            if let Ok(review) = serde_yml::from_str::<Review>(&content) {
+            if let Ok(review) = yaml::from_str::<Review>(&content) {
                 reviews.push(review);
             }
         }

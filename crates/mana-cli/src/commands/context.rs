@@ -135,7 +135,10 @@ fn format_child_summaries_section(
     let mut s = String::new();
     s.push_str("═══ Child Job Summaries ═════════════════════════════════════\n");
     for child in children {
-        let mut line = format!("{} [{}] attempts={}", child.id, child.status, child.attempts);
+        let mut line = format!(
+            "{} [{}] attempts={}",
+            child.id, child.status, child.attempts
+        );
         if let Some(outcome) = &child.recent_outcome {
             line.push_str(&format!(" recent={}", outcome));
         }
