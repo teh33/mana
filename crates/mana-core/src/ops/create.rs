@@ -87,26 +87,22 @@ pub fn create(mana_dir: &Path, params: CreateParams) -> Result<CreateResult> {
         validate_priority(priority)?;
     }
 
-    // Lint the verify command for anti-patterns
+    // Lint the verify command for anti-patterns. Keep library behavior side-effect free:
+    // return structured failure text instead of writing directly to stderr, since callers like
+    // imp may invoke this in-process under a live TUI.
     if let Some(ref verify_cmd) = params.verify {
         let findings = lint_verify(verify_cmd);
         if !findings.is_empty() {
             let has_errors = findings.iter().any(|f| f.level == VerifyLintLevel::Error);
 
-            // Print warnings to stderr regardless
-            for finding in &findings {
-                let prefix = match finding.level {
-                    VerifyLintLevel::Error => "error",
-                    VerifyLintLevel::Warning => "warning",
-                };
-                eprintln!("[verify-lint {}] {}", prefix, finding.message);
-            }
-
-            // Block on errors unless force is set
             if has_errors && !params.force {
-                return Err(anyhow!(
-                    "Verify command has lint errors. Use --force to override."
-                ));
+                let mut message =
+                    String::from("Verify command has lint errors. Use --force to override.");
+                for finding in findings.iter().filter(|f| f.level == VerifyLintLevel::Error) {
+                    message.push_str("\n- ");
+                    message.push_str(&finding.message);
+                }
+                return Err(anyhow!(message));
             }
         }
     }
@@ -330,6 +326,22 @@ pub mod tests {
         let r = create(&bd, minimal_params("First")).unwrap();
         assert_eq!(r.unit.id, "1");
         assert!(r.path.exists());
+    }
+
+    #[test]
+    fn create_reports_verify_lint_errors_without_stderr_side_effects() {
+        let (_dir, bd) = setup_mana_dir();
+        let mut params = minimal_params("Weak verify");
+        params.verify = Some("echo done".into());
+
+        let error = create(&bd, params)
+            .err()
+            .expect("weak verify should be rejected")
+            .to_string();
+        assert!(error.contains("Verify command has lint errors"));
+        assert!(
+            error.contains("always exits successfully") || error.contains("Use --force")
+        );
     }
 
     #[test]

@@ -119,8 +119,9 @@ pub fn cmd_create(mana_dir: &Path, args: CreateArgs) -> Result<String> {
         );
     }
 
-    // Verify lint is handled by mana_core::ops::create::create() at the library level.
-    // All consumers (CLI, imp, MCP) get it automatically.
+    // Print verify lint findings at the CLI layer so interactive/library callers stay
+    // side-effect free while terminal users still get detailed guidance before failure.
+    lint_verify_command(args.verify.as_deref(), args.force)?;
 
     if !args.pass_ok {
         if let Some(verify_cmd) = args.verify.as_ref() {

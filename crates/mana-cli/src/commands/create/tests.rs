@@ -1082,7 +1082,13 @@ mod lint {
 
         let result = cmd_create(&mana_dir, args);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("lint error"));
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("lint error") || error.contains("Verify command has lint errors"));
+        assert!(
+            error.contains("always exits")
+                || error.contains("assert behavior")
+                || error.contains("verify")
+        );
     }
 
     #[test]
