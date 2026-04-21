@@ -98,7 +98,10 @@ pub fn create(mana_dir: &Path, params: CreateParams) -> Result<CreateResult> {
             if has_errors && !params.force {
                 let mut message =
                     String::from("Verify command has lint errors. Use --force to override.");
-                for finding in findings.iter().filter(|f| f.level == VerifyLintLevel::Error) {
+                for finding in findings
+                    .iter()
+                    .filter(|f| f.level == VerifyLintLevel::Error)
+                {
                     message.push_str("\n- ");
                     message.push_str(&finding.message);
                 }
@@ -339,9 +342,7 @@ pub mod tests {
             .expect("weak verify should be rejected")
             .to_string();
         assert!(error.contains("Verify command has lint errors"));
-        assert!(
-            error.contains("always exits successfully") || error.contains("Use --force")
-        );
+        assert!(error.contains("always exits successfully") || error.contains("Use --force"));
     }
 
     #[test]
