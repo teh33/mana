@@ -9,7 +9,7 @@ units:
   verify: cd /Users/asher/mana && cargo test -p mana-pool dedup_verify -- 2>&1 | grep 'test result' | grep -v '0 passed'
   created_at: '2026-03-24T01:58:06.472655Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: true
 - id: '27.4'
@@ -22,7 +22,7 @@ units:
   verify: cd /Users/asher/mana && cargo test -p mana-pool worktree -- 2>&1 | grep 'test result' | grep -v '0 passed'
   created_at: '2026-03-24T02:00:32.215781Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: true
 - id: '27.9'
@@ -162,7 +162,7 @@ units:
   verify: cd /Users/asher/mana && mana show 27.13 >/dev/null && cargo test -p mana-core ops::show -- --nocapture && cargo test -p mana-cli show -- --nocapture
   created_at: '2026-04-09T13:50:42.534604Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '44.1.5'
@@ -833,7 +833,7 @@ units:
   verify: cd /Users/asher/mana && rg -q 'schema_version|source_hash|source_mtime|freshness|sqlite' crates/mana-core/src && cargo test -p mana-core sqlite index -- --nocapture
   created_at: '2026-04-27T18:27:07.260706Z'
   attempts: 0
-  kind: task
+  kind: job
   feature: false
   has_decisions: true
 - id: '247.1.2.7.2'
@@ -854,7 +854,7 @@ units:
   verify: cd /Users/asher/mana && cargo test -p mana-core sqlite rebuild -- --nocapture && rg -q 'invalid.*file|diagnostic|rebuild' crates/mana-core/src
   created_at: '2026-04-27T18:27:15.351743Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '247.1.2.7.3'
@@ -874,7 +874,7 @@ units:
   verify: cd /Users/asher/mana && cargo test -p mana-core sqlite write -- --nocapture && rg -q 'mark.*stale|stale.*index|update.*index' crates/mana-core/src
   created_at: '2026-04-27T18:27:24.204402Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '247.1.2.7.4'
@@ -896,7 +896,7 @@ units:
   verify: cd /Users/asher/mana && cargo test -p mana-core context sqlite -- --nocapture && rg -q 'context.*sqlite|sqlite.*context|assemble.*context' crates/mana-core/src crates/mana-cli/src
   created_at: '2026-04-27T18:27:35.037540Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '247.1.2.7.5'
@@ -918,7 +918,7 @@ units:
   verify: cd /Users/asher/mana && cargo test -p mana-cli doctor index validate -- --nocapture && rg -q 'index rebuild|doctor|validate' crates/mana-cli/src
   created_at: '2026-04-27T18:27:47.595969Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '247.2'
@@ -1138,7 +1138,7 @@ units:
   has_verify: false
   created_at: '2026-04-15T06:16:31.887495Z'
   attempts: 0
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '264'
@@ -1170,7 +1170,7 @@ units:
   verify: test -f .mana/264.3.1-add-shared-imp-core-storage-path-module-for-canoni.md && rg -q '^id:' .mana/264.3.1-add-shared-imp-core-storage-path-module-for-canoni.md
   created_at: '2026-04-16T10:20:34.084034Z'
   attempts: 0
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '264.3.3'
@@ -1189,7 +1189,7 @@ units:
   verify: test -f .mana/264.3.3-migrate-instruction-discovery-to-canonical-impagen.md && rg -q '^id:' .mana/264.3.3-migrate-instruction-discovery-to-canonical-impagen.md
   created_at: '2026-04-16T10:20:59.772191Z'
   attempts: 0
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '272.2'
@@ -1209,7 +1209,7 @@ units:
   verify: 'mana show 272.1 --path /Users/asher/mana | rg ''status: closed|Status: closed|closed'''
   created_at: '2026-04-27T03:37:14.908445Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '272.3'
@@ -1229,7 +1229,7 @@ units:
   verify: test -f .mana/272.3-harden-pure-http-youtube-transcript-body-retrieval.md && rg -q '^id:' .mana/272.3-harden-pure-http-youtube-transcript-body-retrieval.md
   created_at: '2026-04-27T03:55:58.283332Z'
   attempts: 2
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
 - id: '274'
@@ -1247,6 +1247,6 @@ units:
   verify: cd /Users/asher/mana && rg -n "unknown variant|kind.*task|enum.*Kind|UnitKind|\\btask\\b" crates src tests && cargo test kind task index close --quiet
   created_at: '2026-04-27T21:20:00Z'
   attempts: 1
-  kind: task
+  kind: job
   feature: false
   has_decisions: false
