@@ -8,6 +8,7 @@ use crate::config::Config;
 use crate::ctx_assembler::{extract_paths, read_file};
 use crate::discovery::find_unit_file;
 use crate::index::Index;
+use crate::sqlite;
 use crate::unit::{AttemptOutcome, Status, Unit};
 
 // ─── Result types ────────────────────────────────────────────────────────────
@@ -74,8 +75,10 @@ pub fn assemble_agent_context(mana_dir: &Path, id: &str) -> Result<AgentContext>
     let paths = merge_paths(&unit);
     let rules = load_rules(mana_dir);
     let attempt_notes = format_attempt_notes(&unit);
-    let dep_providers = resolve_dependency_context(mana_dir, &unit);
-    let child_summaries = summarize_child_units(mana_dir, &unit.id);
+    let dep_providers = resolve_dependency_context_sqlite(mana_dir, &unit)
+        .unwrap_or_else(|_| resolve_dependency_context(mana_dir, &unit));
+    let child_summaries = summarize_child_units_sqlite(mana_dir, &unit.id)
+        .unwrap_or_else(|_| summarize_child_units(mana_dir, &unit.id));
 
     let canonical_base = project_dir
         .canonicalize()
@@ -202,6 +205,25 @@ pub fn format_attempt_notes(unit: &Unit) -> Option<String> {
 
 // ─── Dependency context ──────────────────────────────────────────────────────
 
+pub fn resolve_dependency_context_sqlite(mana_dir: &Path, unit: &Unit) -> Result<Vec<DepProvider>> {
+    let sqlite = open_fresh_sqlite_index(mana_dir)?;
+    if let Some(message) = sqlite.invalid_relevant_diagnostic(&unit.id)? {
+        anyhow::bail!("invalid mana unit {}: {}", unit.id, message);
+    }
+
+    let rows = sqlite.dependency_providers(&unit.id, unit.parent.as_deref(), &unit.requires)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| DepProvider {
+            artifact: row.artifact,
+            unit_id: row.unit_id,
+            unit_title: row.unit_title,
+            status: row.status,
+            description: row.description,
+        })
+        .collect())
+}
+
 /// Resolve dependency context: find sibling units that produce artifacts
 /// this unit requires, and load their descriptions.
 pub fn resolve_dependency_context(mana_dir: &Path, unit: &Unit) -> Vec<DepProvider> {
@@ -239,6 +261,27 @@ pub fn resolve_dependency_context(mana_dir: &Path, unit: &Unit) -> Vec<DepProvid
     }
 
     providers
+}
+
+pub fn summarize_child_units_sqlite(mana_dir: &Path, parent_id: &str) -> Result<Vec<ChildSummary>> {
+    let sqlite = open_fresh_sqlite_index(mana_dir)?;
+    if let Some(message) = sqlite.invalid_relevant_diagnostic(parent_id)? {
+        anyhow::bail!("invalid mana unit {}: {}", parent_id, message);
+    }
+
+    let rows = sqlite.child_summaries(parent_id)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| ChildSummary {
+            id: row.id,
+            title: row.title,
+            status: row.status,
+            attempts: row.attempts,
+            recent_outcome: row.recent_outcome,
+            summary: row.summary,
+            follow_up: row.follow_up,
+        })
+        .collect())
 }
 
 /// Summarize direct child tasks for parent-oriented views.
@@ -284,6 +327,11 @@ pub fn summarize_child_units(mana_dir: &Path, parent_id: &str) -> Vec<ChildSumma
             }
         })
         .collect()
+}
+
+fn open_fresh_sqlite_index(mana_dir: &Path) -> Result<sqlite::Index> {
+    sqlite::Index::rebuild(mana_dir)?;
+    sqlite::Index::open(mana_dir)
 }
 
 fn latest_attempt_outcome(unit: &Unit) -> Option<String> {
