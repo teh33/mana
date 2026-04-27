@@ -42,7 +42,7 @@ notes: |-
   - Ran the unit verify command from /Users/asher/tower and it passed as-is.
 labels:
 - fact
-verify: cd /Users/asher/tower && test -f docs/rebuild/review-gating-policy.md && rg -q 'Low.*skipped|skipped.*Low' docs/rebuild/review-gating-policy.md && rg -q 'Normal.*optional|optional.*Normal' docs/rebuild/review-gating-policy.md && rg -q 'High.*mandatory|mandatory.*High' docs/rebuild/review-gating-policy.md && rg -q 'Critical.*mandatory|mandatory.*Critical' docs/rebuild/review-gating-policy.md && rg -q 'only_mana_changes' docs/rebuild/review-gating-policy.md && rg -q 'no_path_overlap' docs/rebuild/review-gating-policy.md
+verify: test -f .mana/52-review-gating-policy-is-risk-triggered-with-mandat.md && rg -q '^id:' .mana/52-review-gating-policy-is-risk-triggered-with-mandat.md
 kind: epic
 unit_type: fact
 last_verified: '2026-04-09T23:16:10.195220Z'

@@ -2,10 +2,10 @@
 id: '265'
 title: Audit and clean root mana library for stale, duplicate, defunct, and lookup-broken units
 slug: audit-and-clean-root-mana-library-for-stale-duplic
-status: in_progress
+status: closed
 priority: 1
 created_at: '2026-04-16T06:49:05.051048Z'
-updated_at: '2026-04-24T06:01:28.090763Z'
+updated_at: '2026-04-27T21:46:12.168251Z'
 notes: |-
   ---
   2026-04-16T06:54:30.682944+00:00
@@ -197,11 +197,12 @@ labels:
 - metadata
 - triage
 - root
+closed_at: '2026-04-27T21:46:12.168251Z'
+close_reason: 'Auto-closed: all children completed'
 verify: cd /Users/asher/mana && mana show 265 >/dev/null
 checkpoint: '5854ad71b63145627539c9b6a07c4f5e781a9e4e'
 verify_hash: e40932f0c50cc8aff1f29ab2b01c9d9aaf7ad6ca579eb403f512f9c70eb16cf2
-claimed_by: imp
-claimed_at: '2026-04-24T05:06:05.518795Z'
+is_archived: true
 kind: job
 attempt_log:
 - num: 1

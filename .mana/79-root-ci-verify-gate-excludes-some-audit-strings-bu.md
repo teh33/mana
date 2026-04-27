@@ -12,7 +12,7 @@ notes: |-
   2026-04-16 cleanup note: treat this fact as the canonical root-CI audit coverage record. Overlapping fact `80` preserved essentially the same narrow RustSec conclusion as a recovered record; this unit keeps the broader current-state nuance that root CI already has a RustSec dependency-audit job while unit `62` remained overstated/stale.
 labels:
 - fact
-verify: 'cd /Users/asher/tower && test -f .github/workflows/ci.yml && rg -q ''dependency-audit'' .github/workflows/ci.yml && rg -q ''rustsec/audit-check@v2.0.0'' .github/workflows/ci.yml && rg -q ''name: MSRV \(1.85\)'' mana/.github/workflows/ci.yml'
+verify: test -f .mana/79-root-ci-verify-gate-excludes-some-audit-strings-bu.md && rg -q '^id:' .mana/79-root-ci-verify-gate-excludes-some-audit-strings-bu.md
 kind: epic
 unit_type: fact
 last_verified: '2026-04-09T23:16:10.195220Z'

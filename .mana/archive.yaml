@@ -1,0 +1,435 @@
+units:
+- id: '27.23'
+  title: Map review records and approval lineage into canonical autonomy disposition
+  status: closed
+  priority: 2
+  parent: '27'
+  dependencies:
+  - '27.17'
+  - '45.6.3'
+  - '27.20'
+  labels:
+  - architecture
+  - mana
+  - review
+  - approval
+  - autonomy
+  - follow-up
+  updated_at: '2026-04-27T21:46:10.508168Z'
+  has_verify: true
+  verify: cd /Users/asher/mana && rg -q 'ApprovalState|ReviewState|refresh_autonomy_disposition' crates/mana-core/src/unit && cargo check -p mana-core
+  created_at: '2026-04-09T14:56:08.874239Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '45.4.3'
+  title: Sequence the migration from shell-template spawning to the first typed runner path
+  status: closed
+  priority: 1
+  parent: '45.4'
+  dependencies:
+  - '45.4.1'
+  labels:
+  - tower
+  - rebuild
+  - phase-3
+  - runner
+  - migration
+  updated_at: '2026-04-27T21:46:10.594276Z'
+  has_verify: true
+  verify: test -f .mana/45.4.3-sequence-the-migration-from-shell-template-spawnin.md && rg -q '^id:' .mana/45.4.3-sequence-the-migration-from-shell-template-spawnin.md
+  created_at: '2026-04-08T17:33:36.032556Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '45.7.2'
+  title: Define migration shim strategy and renameability rules for tower-contracts and related seams
+  status: closed
+  priority: 1
+  parent: '45.7'
+  dependencies:
+  - '45.7.1'
+  labels:
+  - tower
+  - rebuild
+  - phase-6
+  - migration
+  - contracts
+  - spec
+  updated_at: '2026-04-27T21:46:10.678570Z'
+  has_verify: true
+  verify: test -f .mana/45.7.2-define-migration-shim-strategy-and-renameability-r.md && rg -q '^id:' .mana/45.7.2-define-migration-shim-strategy-and-renameability-r.md
+  created_at: '2026-04-08T17:42:10.078718Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '47'
+  title: Former 27.1 no-match verify claim became stale after budget tests landed
+  status: closed
+  priority: 3
+  labels:
+  - fact
+  updated_at: '2026-04-09T15:12:00Z'
+  has_verify: true
+  verify: cd /Users/asher/mana && cargo test -p mana-pool budget -- 2>&1 | grep 'test result' | grep -v '0 passed'
+  created_at: '2026-04-09T15:10:00Z'
+  attempts: 0
+  paths:
+  - '.mana/archive/2026/04/27.1-budget-and-circuit-breaker-for-dispatch.md'
+  - '.mana/61-mana-pool-budget-filter-currently-matches-2-dispat.md'
+  - mana/crates/mana-pool/src/dispatch.rs
+  kind: epic
+  feature: false
+  has_decisions: false
+- id: '50.2'
+  title: Define canonical imp command grammar and default-entrypoint migration
+  status: closed
+  priority: 1
+  parent: '50'
+  labels:
+  - architecture
+  - imp
+  - cli
+  - ux
+  - commands
+  updated_at: '2026-04-24T05:37:29.357981Z'
+  has_verify: true
+  verify: test -f .mana/50.2-define-canonical-imp-command-grammar-and-default-e.md && rg -q '^id:' .mana/50.2-define-canonical-imp-command-grammar-and-default-e.md
+  created_at: '2026-04-09T05:56:49.009337Z'
+  attempts: 0
+  kind: epic
+  feature: false
+  has_decisions: true
+- id: '50.10.1.1'
+  title: Fix mana-core close.rs compile mismatch blocking imp settings smoke verification
+  status: closed
+  priority: 1
+  parent: '50.10.1'
+  labels:
+  - mana
+  - build
+  - verification
+  - unblocker
+  updated_at: '2026-04-24T05:37:29.482917Z'
+  has_verify: true
+  verify: cd /Users/asher/mana && cargo check -p mana-core && cargo check -p imp-cli
+  created_at: '2026-04-09T07:52:24.291846Z'
+  attempts: 0
+  kind: epic
+  feature: false
+  has_decisions: false
+- id: '50.16.5.1'
+  title: Audit and reconcile imp session storage and session-search index paths so local conversation recovery is reliable
+  status: closed
+  priority: 1
+  parent: '50.16.5'
+  updated_at: '2026-04-27T21:46:10.761968Z'
+  has_verify: true
+  verify: test -f .mana/50.16.5.1-audit-and-reconcile-imp-session-storage-and-sessio.md && rg -q '^id:' .mana/50.16.5.1-audit-and-reconcile-imp-session-storage-and-sessio.md
+  created_at: '2026-04-16T06:34:15.199894Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '50.28'
+  title: Define a backend-neutral session-host surface for imp persistent terminal hosting
+  status: closed
+  priority: 2
+  parent: '50'
+  dependencies:
+  - '50.25'
+  - '50.26'
+  - '50.27'
+  labels:
+  - architecture
+  - imp
+  - cli
+  - runtime
+  - detached
+  - tmux
+  - session-host
+  updated_at: '2026-04-27T21:46:10.849305Z'
+  has_verify: true
+  verify: test -f .mana/50.28-define-a-backend-neutral-session-host-surface-for.md && rg -q '^id:' .mana/50.28-define-a-backend-neutral-session-host-surface-for.md
+  created_at: '2026-04-16T06:54:02.566744Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '77'
+  title: Repair missing root mana lookup for vanished review-queue fact 56 after successful verification
+  status: closed
+  priority: 2
+  labels:
+  - mana
+  - metadata
+  - lookup
+  - bug
+  - follow-up
+  updated_at: '2026-04-27T21:46:10.934910Z'
+  has_verify: true
+  verify: test -f .mana/77-repair-missing-root-mana-lookup-for-vanished-revie.md && rg -q '^id:' .mana/77-repair-missing-root-mana-lookup-for-vanished-revie.md
+  created_at: '2026-04-09T18:07:35.338283Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '247.1.1'
+  title: Specify Markdown-as-view boundary for mana durable memory and work objects
+  status: closed
+  priority: 2
+  parent: '247.1'
+  labels:
+  - architecture
+  - memory
+  - mana
+  - markdown
+  - object-native
+  updated_at: '2026-04-27T21:46:11.015857Z'
+  has_verify: true
+  verify: test -f .mana/247.1.1-specify-markdown-as-view-boundary-for-mana-durable.md && rg -q '^id:' .mana/247.1.1-specify-markdown-as-view-boundary-for-mana-durable.md
+  created_at: '2026-04-27T17:46:23.069287Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '253.1'
+  title: Map current mana surfaces to proto-SuperState and define the minimum bridge to a general Object/Assertion/Event/Rule substrate
+  status: closed
+  priority: 1
+  parent: '253'
+  labels:
+  - architecture
+  - superproduct
+  - tower
+  - mana
+  - superstate
+  updated_at: '2026-04-27T21:46:11.382740Z'
+  produces:
+  - docs/architecture/superstate-gap-map.md
+  has_verify: true
+  verify: test -f .mana/253.1-map-current-mana-surfaces-to-proto-superstate-and.md && rg -q '^id:' .mana/253.1-map-current-mana-surfaces-to-proto-superstate-and.md
+  created_at: '2026-04-14T08:10:03.414689Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '263.2'
+  title: Classify mana-core stderr writes for embedded risk
+  status: closed
+  priority: 2
+  parent: '263'
+  labels:
+  - audit
+  - stderr
+  - mana
+  assignee: imp
+  updated_at: '2026-04-27T21:46:11.470857Z'
+  has_verify: true
+  verify: rg -n "\beprintln!\s*\(" crates/mana-core -S
+  created_at: '2026-04-15T07:42:55.676924Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '264.1'
+  title: Audit current imp durable storage surfaces and path-resolution logic
+  status: closed
+  priority: 1
+  parent: '264'
+  labels:
+  - imp
+  - storage
+  - spec
+  updated_at: '2026-04-27T21:46:11.558821Z'
+  has_verify: true
+  verify: test -f .mana/264.1-audit-current-imp-durable-storage-surfaces-and-pat.md && rg -q '^id:' .mana/264.1-audit-current-imp-durable-storage-surfaces-and-pat.md
+  created_at: '2026-04-16T06:39:50.309260Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '264.2'
+  title: Specify normalized imp storage contract and migration policy
+  status: closed
+  priority: 1
+  parent: '264'
+  labels:
+  - imp
+  - storage
+  - spec
+  updated_at: '2026-04-27T21:46:11.643844Z'
+  has_verify: true
+  verify: test -f .mana/264.2-specify-normalized-imp-storage-contract-and-migrat.md && rg -q '^id:' .mana/264.2-specify-normalized-imp-storage-contract-and-migrat.md
+  created_at: '2026-04-16T06:40:03.653699Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '264.3'
+  title: Implement shared imp-core storage path helpers and migrate callers
+  status: closed
+  priority: 1
+  parent: '264'
+  dependencies:
+  - '264.1'
+  - '264.2'
+  labels:
+  - imp
+  - storage
+  - implementation
+  updated_at: '2026-04-27T21:46:11.731122Z'
+  has_verify: true
+  verify: test -f .mana/264.3-implement-shared-imp-core-storage-path-helpers-and.md && rg -q '^id:' .mana/264.3-implement-shared-imp-core-storage-path-helpers-and.md
+  created_at: '2026-04-16T06:40:15.919382Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '264.5'
+  title: Reconcile prompt-template and shell-tool storage surfaces with actual imp runtime support
+  status: closed
+  priority: 2
+  parent: '264'
+  labels:
+  - imp
+  - storage
+  - spec
+  updated_at: '2026-04-27T21:46:11.815636Z'
+  has_verify: true
+  verify: test -f .mana/264.5-reconcile-prompt-template-and-shell-tool-storage-s.md && rg -q '^id:' .mana/264.5-reconcile-prompt-template-and-shell-tool-storage-s.md
+  created_at: '2026-04-16T06:52:46.128654Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '264.6'
+  title: Decide canonical imp filesystem roots for global and project-local storage
+  status: closed
+  priority: 1
+  parent: '264'
+  labels:
+  - imp
+  - storage
+  - spec
+  updated_at: '2026-04-27T21:46:11.900555Z'
+  has_verify: true
+  verify: test -f .mana/264.6-decide-canonical-imp-filesystem-roots-for-global-a.md && rg -q '^id:' .mana/264.6-decide-canonical-imp-filesystem-roots-for-global-a.md
+  created_at: '2026-04-16T07:54:09.194309Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: true
+- id: '265'
+  title: Audit and clean root mana library for stale, duplicate, defunct, and lookup-broken units
+  status: closed
+  priority: 1
+  labels:
+  - mana
+  - cleanup
+  - metadata
+  - triage
+  - root
+  updated_at: '2026-04-27T21:46:12.168251Z'
+  has_verify: true
+  verify: cd /Users/asher/mana && mana show 265 >/dev/null
+  created_at: '2026-04-16T06:49:05.051048Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '265.1'
+  title: Classify the live root mana graph into keep, stale-completed, duplicate, metadata-bug, and archive-debt buckets
+  status: closed
+  priority: 1
+  parent: '265'
+  labels:
+  - mana
+  - cleanup
+  - audit
+  - triage
+  - root
+  updated_at: '2026-04-27T21:46:11.985221Z'
+  has_verify: true
+  verify: cd /Users/asher/mana && mana show 265.1 >/dev/null
+  created_at: '2026-04-16T07:20:40.981196Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '265.2'
+  title: Identify canonical-vs-superseded duplicate and near-duplicate units in root mana
+  status: closed
+  priority: 1
+  parent: '265'
+  labels:
+  - mana
+  - cleanup
+  - duplicates
+  - facts
+  - root
+  updated_at: '2026-04-27T21:46:12.070516Z'
+  has_verify: true
+  verify: cd /Users/asher/mana && mana show 265.2 >/dev/null
+  created_at: '2026-04-16T07:20:41.163837Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '265.3'
+  title: Audit root mana metadata-bug and lookup-recovery units for consolidation vs continued tracking
+  status: closed
+  priority: 1
+  parent: '265'
+  labels:
+  - mana
+  - cleanup
+  - metadata
+  - lookup
+  - root
+  updated_at: '2026-04-27T21:46:12.155680Z'
+  has_verify: true
+  verify: cd /Users/asher/mana && mana show 265.3 >/dev/null
+  created_at: '2026-04-16T07:20:41.347417Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '270.1.1'
+  title: Design cross-ecosystem `uu install --default` semantics beyond Cargo
+  status: closed
+  priority: 2
+  parent: '270.1'
+  updated_at: '2026-04-27T21:46:12.245050Z'
+  has_verify: true
+  verify: bash -lc 'test -f /Users/asher/uu/crates/uu/src/cmd/install.rs && echo ok'
+  created_at: '2026-04-24T05:03:33.130542Z'
+  attempts: 0
+  paths:
+  - /Users/asher/uu/crates/uu/src/cmd/install.rs
+  - /Users/asher/uu/README.md
+  kind: job
+  feature: false
+  has_decisions: false
+- id: '273.5.1'
+  title: Add imp extension storage and discovery for TypeScript packages
+  status: closed
+  priority: 1
+  parent: '273.5'
+  labels:
+  - imp
+  - extensions
+  - storage
+  - discovery
+  - typescript
+  updated_at: '2026-04-27T21:46:12.467937Z'
+  has_verify: true
+  verify: test -f .mana/273.5.1-add-imp-extension-storage-and-discovery-for-typesc.md && rg -q '^id:' .mana/273.5.1-add-imp-extension-storage-and-discovery-for-typesc.md
+  created_at: '2026-04-27T04:10:39.368566Z'
+  attempts: 0
+  kind: job
+  feature: false
+  has_decisions: false

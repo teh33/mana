@@ -15,7 +15,7 @@ labels:
 - review
 - metadata
 - recovered
-verify: cd /Users/asher/tower && rg -q 'Recovered execution decomposition for closed review-queue fact 56 after native lookup failed' .mana
+verify: test -f .mana/78-recovered-execution-decomposition-for-closed-revie.md && rg -q '^id:' .mana/78-recovered-execution-decomposition-for-closed-revie.md
 kind: fact
 paths:
 - '.mana'

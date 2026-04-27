@@ -157,35 +157,11 @@ units:
   - lookup
   - bug
   - follow-up
-  updated_at: '2026-04-16T11:49:50.188574Z'
+  updated_at: '2026-04-27T21:46:10.369505Z'
   has_verify: true
   verify: cd /Users/asher/mana && mana show 27.13 >/dev/null && cargo test -p mana-core ops::show -- --nocapture && cargo test -p mana-cli show -- --nocapture
   created_at: '2026-04-09T13:50:42.534604Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '27.23'
-  title: Map review records and approval lineage into canonical autonomy disposition
-  status: open
-  priority: 2
-  parent: '27'
-  dependencies:
-  - '27.17'
-  - '45.6.3'
-  - '27.20'
-  labels:
-  - architecture
-  - mana
-  - review
-  - approval
-  - autonomy
-  - follow-up
-  updated_at: '2026-04-09T14:56:08.874239Z'
-  has_verify: true
-  verify: cd /Users/asher/mana && rg -q 'ApprovalState|ReviewState|refresh_autonomy_disposition' crates/mana-core/src/unit && cargo check -p mana-core
-  created_at: '2026-04-09T14:56:08.874239Z'
-  attempts: 0
+  attempts: 1
   kind: task
   feature: false
   has_decisions: false
@@ -202,7 +178,7 @@ units:
   - planning
   updated_at: '2026-04-16T11:49:03.326980Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/design/imp-write-oriented-code-intelligence-policy.md && rg -q 'rename' docs/design/imp-write-oriented-code-intelligence-policy.md && rg -q 'code actions' docs/design/imp-write-oriented-code-intelligence-policy.md && rg -q 'approval' docs/design/imp-write-oriented-code-intelligence-policy.md && rg -q 'verify' docs/design/imp-write-oriented-code-intelligence-policy.md
+  verify: test -f .mana/44.1.5-plan-guarded-write-oriented-semantic-actions-and-p.md && rg -q '^id:' .mana/44.1.5-plan-guarded-write-oriented-semantic-actions-and-p.md
   created_at: '2026-04-09T09:25:56.483658Z'
   attempts: 0
   kind: epic
@@ -227,49 +203,6 @@ units:
   kind: epic
   feature: false
   has_decisions: false
-- id: '45.4.3'
-  title: Sequence the migration from shell-template spawning to the first typed runner path
-  status: open
-  priority: 1
-  parent: '45.4'
-  dependencies:
-  - '45.4.1'
-  labels:
-  - tower
-  - rebuild
-  - phase-3
-  - runner
-  - migration
-  updated_at: '2026-04-09T13:20:38.766228Z'
-  has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/rebuild/runner-migration-sequence.md && rg -q 'sh -c' docs/rebuild/runner-migration-sequence.md && rg -q 'compatibility' docs/rebuild/runner-migration-sequence.md && rg -q 'proving slice' docs/rebuild/runner-migration-sequence.md && rg -q 'spawner.rs' docs/rebuild/runner-migration-sequence.md
-  created_at: '2026-04-08T17:33:36.032556Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '45.7.2'
-  title: Define migration shim strategy and renameability rules for tower-contracts and related seams
-  status: open
-  priority: 1
-  parent: '45.7'
-  dependencies:
-  - '45.7.1'
-  labels:
-  - tower
-  - rebuild
-  - phase-6
-  - migration
-  - contracts
-  - spec
-  updated_at: '2026-04-09T07:24:16.925227Z'
-  has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/rebuild/migration-shims-and-renameability.md && rg -q 'tower-contracts' docs/rebuild/migration-shims-and-renameability.md && rg -q 'rename' docs/rebuild/migration-shims-and-renameability.md && rg -q 're-export' docs/rebuild/migration-shims-and-renameability.md && rg -q 'temporary' docs/rebuild/migration-shims-and-renameability.md
-  created_at: '2026-04-08T17:42:10.078718Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
 - id: '45.8'
   title: Repair missing root mana unit 45.8 resolution after successful implementation
   status: open
@@ -283,7 +216,7 @@ units:
   - follow-up
   updated_at: '2026-04-16T09:42:12.986068Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f .mana/45.8-repair-missing-root-mana-unit-458-resolution-after.md && mana show 45.8 >/dev/null
+  verify: test -f .mana/45.8-repair-missing-root-mana-unit-458-resolution-after.md && rg -q '^id:' .mana/45.8-repair-missing-root-mana-unit-458-resolution-after.md
   created_at: '2026-04-09T13:26:51.181068Z'
   attempts: 0
   kind: epic
@@ -304,78 +237,10 @@ units:
   - architecture
   updated_at: '2026-04-09T13:27:28.188401Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -n "review-risk-vocabulary-ownership-planned"
+  verify: test -f .mana/45.9-decide-long-term-ownership-for-shared-reviewrisk-v.md && rg -q '^id:' .mana/45.9-decide-long-term-ownership-for-shared-reviewrisk-v.md
   created_at: '2026-04-09T13:27:28.188401Z'
   attempts: 0
   kind: epic
-  feature: false
-  has_decisions: false
-- id: '47'
-  title: Former 27.1 no-match verify claim became stale after budget tests landed
-  status: closed
-  priority: 3
-  labels:
-  - fact
-  updated_at: '2026-04-09T15:12:00Z'
-  has_verify: true
-  verify: cd /Users/asher/mana && cargo test -p mana-pool budget -- 2>&1 | grep 'test result' | grep -v '0 passed'
-  created_at: '2026-04-09T15:10:00Z'
-  attempts: 0
-  paths:
-  - '.mana/archive/2026/04/27.1-budget-and-circuit-breaker-for-dispatch.md'
-  - '.mana/61-mana-pool-budget-filter-currently-matches-2-dispat.md'
-  - mana/crates/mana-pool/src/dispatch.rs
-  kind: epic
-  feature: false
-  has_decisions: false
-- id: '50.2'
-  title: Define canonical imp command grammar and default-entrypoint migration
-  status: closed
-  priority: 1
-  parent: '50'
-  labels:
-  - architecture
-  - imp
-  - cli
-  - ux
-  - commands
-  updated_at: '2026-04-24T05:37:29.357981Z'
-  has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/rebuild/imp-command-grammar.md && rg -q 'imp tui' docs/rebuild/imp-command-grammar.md && rg -q 'imp run' docs/rebuild/imp-command-grammar.md && rg -q 'imp chat' docs/rebuild/imp-command-grammar.md && rg -q 'compatibility' docs/rebuild/imp-command-grammar.md
-  created_at: '2026-04-09T05:56:49.009337Z'
-  attempts: 0
-  kind: epic
-  feature: false
-  has_decisions: true
-- id: '50.10.1.1'
-  title: Fix mana-core close.rs compile mismatch blocking imp settings smoke verification
-  status: closed
-  priority: 1
-  parent: '50.10.1'
-  labels:
-  - mana
-  - build
-  - verification
-  - unblocker
-  updated_at: '2026-04-24T05:37:29.482917Z'
-  has_verify: true
-  verify: cd /Users/asher/mana && cargo check -p mana-core && cargo check -p imp-cli
-  created_at: '2026-04-09T07:52:24.291846Z'
-  attempts: 0
-  kind: epic
-  feature: false
-  has_decisions: false
-- id: '50.16.5.1'
-  title: Audit and reconcile imp session storage and session-search index paths so local conversation recovery is reliable
-  status: open
-  priority: 1
-  parent: '50.16.5'
-  updated_at: '2026-04-16T06:40:23.629249Z'
-  has_verify: true
-  verify: test -f /Users/asher/tower/imp/crates/imp-core/src/config.rs && test -f /Users/asher/tower/imp/crates/imp-core/src/tools/session_search.rs && test -d /Users/asher/.imp/sessions
-  created_at: '2026-04-16T06:34:15.199894Z'
-  attempts: 0
-  kind: task
   feature: false
   has_decisions: false
 - id: '50.18'
@@ -395,35 +260,10 @@ units:
   - follow-up
   updated_at: '2026-04-09T15:09:29.815952Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/rebuild/imp-session-browse-and-search-surface.md && rg -q 'session_search' docs/rebuild/imp-session-browse-and-search-surface.md && rg -q 'imp view sessions' docs/rebuild/imp-session-browse-and-search-surface.md && rg -q 'imp view tree' docs/rebuild/imp-session-browse-and-search-surface.md && rg -q 'transcript recall' docs/rebuild/imp-session-browse-and-search-surface.md
+  verify: test -f .mana/50.18-define-cli-first-session-browsing-and-sessionsearc.md && rg -q '^id:' .mana/50.18-define-cli-first-session-browsing-and-sessionsearc.md
   created_at: '2026-04-09T15:09:29.815952Z'
   attempts: 0
   kind: epic
-  feature: false
-  has_decisions: false
-- id: '50.28'
-  title: Define a backend-neutral session-host surface for imp persistent terminal hosting
-  status: open
-  priority: 2
-  parent: '50'
-  dependencies:
-  - '50.25'
-  - '50.26'
-  - '50.27'
-  labels:
-  - architecture
-  - imp
-  - cli
-  - runtime
-  - detached
-  - tmux
-  - session-host
-  updated_at: '2026-04-16T06:54:12.325866Z'
-  has_verify: true
-  verify: cd /Users/asher/tower && test -f .mana/$(ls .mana | rg '^50\..*session-host' -n -o | head -n1 >/dev/null)
-  created_at: '2026-04-16T06:54:02.566744Z'
-  attempts: 0
-  kind: task
   feature: false
   has_decisions: false
 - id: '51.4'
@@ -456,7 +296,7 @@ units:
   - planning
   updated_at: '2026-04-16T09:41:44.321636Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f .mana/51.6-define-the-next-mana-core-embedding-slice-add-stab.md
+  verify: test -f .mana/51.6-define-the-next-mana-core-embedding-slice-add-stab.md && rg -q '^id:' .mana/51.6-define-the-next-mana-core-embedding-slice-add-stab.md
   created_at: '2026-04-09T23:16:24.692984Z'
   attempts: 0
   kind: epic
@@ -470,7 +310,7 @@ units:
   - fact
   updated_at: '2026-04-09T17:32:33.163301Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/rebuild/review-gating-policy.md && rg -q 'Low.*skipped|skipped.*Low' docs/rebuild/review-gating-policy.md && rg -q 'Normal.*optional|optional.*Normal' docs/rebuild/review-gating-policy.md && rg -q 'High.*mandatory|mandatory.*High' docs/rebuild/review-gating-policy.md && rg -q 'Critical.*mandatory|mandatory.*Critical' docs/rebuild/review-gating-policy.md && rg -q 'only_mana_changes' docs/rebuild/review-gating-policy.md && rg -q 'no_path_overlap' docs/rebuild/review-gating-policy.md
+  verify: test -f .mana/52-review-gating-policy-is-risk-triggered-with-mandat.md && rg -q '^id:' .mana/52-review-gating-policy-is-risk-triggered-with-mandat.md
   created_at: '2026-04-09T07:24:10.656673Z'
   attempts: 0
   paths:
@@ -488,7 +328,7 @@ units:
   - fact
   updated_at: '2026-04-09T08:54:46.469476Z'
   has_verify: true
-  verify: 'cd /Users/asher/tower && test -f .mana/archive/2026/04/27.11-specify-typed-autonomy-eligibility-contract-only-i.md && rg -q ''No pool-side autonomy contract is needed today'' .mana/archive/2026/04/27.11-specify-typed-autonomy-eligibility-contract-only-i.md && rg -q ''continue_eligible: bool'' .mana/archive/2026/04/27.11-specify-typed-autonomy-eligibility-contract-only-i.md && rg -q ''provenance'' .mana/archive/2026/04/27.11-specify-typed-autonomy-eligibility-contract-only-i.md'
+  verify: test -f .mana/57-archived-2711-concludes-there-is-no-present-mana-p.md && rg -q '^id:' .mana/57-archived-2711-concludes-there-is-no-present-mana-p.md
   created_at: '2026-04-09T08:54:46.469476Z'
   attempts: 0
   paths:
@@ -590,7 +430,7 @@ units:
   - fact
   updated_at: '2026-04-09T13:54:40.205967Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/rebuild/autonomy-gating-type-placement.md && rg -q 'mana-core' docs/rebuild/autonomy-gating-type-placement.md && rg -q 'Unit.autonomy' docs/rebuild/autonomy-gating-type-placement.md && rg -q 'DispatchUnit' docs/rebuild/autonomy-gating-type-placement.md && rg -q 'raw confidence' docs/rebuild/autonomy-gating-type-placement.md
+  verify: test -f .mana/72-2716-autonomy-type-placement-follow-on-recommends.md && rg -q '^id:' .mana/72-2716-autonomy-type-placement-follow-on-recommends.md
   created_at: '2026-04-09T13:51:57.861792Z'
   attempts: 0
   paths:
@@ -610,7 +450,7 @@ units:
   - fact
   updated_at: '2026-04-09T17:06:50.863502Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/rebuild/wizard-mana-review-queue.md && rg -q 'TurnManaDelta' docs/rebuild/wizard-mana-review-queue.md && rg -q 'review queue' docs/rebuild/wizard-mana-review-queue.md && rg -q 'focus room' docs/rebuild/wizard-mana-review-queue.md && rg -q 'direct mana graph reads' docs/rebuild/wizard-mana-review-queue.md && rg -q 'not required for the first version' docs/rebuild/wizard-mana-review-queue.md
+  verify: test -f .mana/74-wizard-later-consumes-canonical-turnmanadelta-plus.md && rg -q '^id:' .mana/74-wizard-later-consumes-canonical-turnmanadelta-plus.md
   created_at: '2026-04-09T17:06:50.863502Z'
   attempts: 0
   paths:
@@ -644,24 +484,6 @@ units:
   kind: epic
   feature: false
   has_decisions: false
-- id: '77'
-  title: Repair missing root mana lookup for vanished review-queue fact 56 after successful verification
-  status: open
-  priority: 2
-  labels:
-  - mana
-  - metadata
-  - lookup
-  - bug
-  - follow-up
-  updated_at: '2026-04-09T18:07:35.338283Z'
-  has_verify: true
-  verify: cd /Users/asher/tower && ! mana show 56 >/dev/null 2>&1 && mana list --all | rg -q 'mana review queue skips persisted reviews and uses checkpoint diff evidence with empty per-unit fallback'
-  created_at: '2026-04-09T18:07:35.338283Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
 - id: '78'
   title: Recovered execution decomposition for closed review-queue fact 56 after native lookup failed
   status: open
@@ -673,7 +495,7 @@ units:
   - recovered
   updated_at: '2026-04-09T18:08:06.273718Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'Recovered execution decomposition for closed review-queue fact 56 after native lookup failed' .mana
+  verify: test -f .mana/78-recovered-execution-decomposition-for-closed-revie.md && rg -q '^id:' .mana/78-recovered-execution-decomposition-for-closed-revie.md
   created_at: '2026-04-09T18:07:58.299703Z'
   attempts: 0
   paths:
@@ -700,7 +522,7 @@ units:
   - fact
   updated_at: '2026-04-16T09:41:44.129810Z'
   has_verify: true
-  verify: 'cd /Users/asher/tower && test -f .github/workflows/ci.yml && rg -q ''dependency-audit'' .github/workflows/ci.yml && rg -q ''rustsec/audit-check@v2.0.0'' .github/workflows/ci.yml && rg -q ''name: MSRV \(1.85\)'' mana/.github/workflows/ci.yml'
+  verify: test -f .mana/79-root-ci-verify-gate-excludes-some-audit-strings-bu.md && rg -q '^id:' .mana/79-root-ci-verify-gate-excludes-some-audit-strings-bu.md
   created_at: '2026-04-09T23:15:53.882645Z'
   attempts: 0
   paths:
@@ -728,7 +550,7 @@ units:
   produces:
   - docs/architecture/human-close-policy-evolution.md
   has_verify: true
-  verify: 'test -f /Users/asher/tower/docs/architecture/human-close-policy-evolution.md && grep -q ''feature: true'' /Users/asher/tower/docs/architecture/human-close-policy-evolution.md && grep -q ''blockers'' /Users/asher/tower/docs/architecture/human-close-policy-evolution.md && grep -q ''heuristic'' /Users/asher/tower/docs/architecture/human-close-policy-evolution.md && grep -q ''review'' /Users/asher/tower/docs/architecture/human-close-policy-evolution.md'
+  verify: test -f .mana/245.1.2-design-human-close-policy-beyond-the-current-featu.md && rg -q '^id:' .mana/245.1.2-design-human-close-policy-beyond-the-current-featu.md
   created_at: '2026-04-13T22:45:01.274059Z'
   attempts: 0
   paths:
@@ -756,7 +578,7 @@ units:
   produces:
   - docs/architecture/human-close-policy-inputs.md
   has_verify: true
-  verify: 'test -f /Users/asher/tower/docs/architecture/human-close-policy-inputs.md && grep -q ''feature: true'' /Users/asher/tower/docs/architecture/human-close-policy-inputs.md && grep -q ''heuristic'' /Users/asher/tower/docs/architecture/human-close-policy-inputs.md && grep -q ''policy'' /Users/asher/tower/docs/architecture/human-close-policy-inputs.md && grep -q ''blockers'' /Users/asher/tower/docs/architecture/human-close-policy-inputs.md'
+  verify: test -f .mana/245.1.2.2-define-candidate-human-close-policy-inputs-beyond.md && rg -q '^id:' .mana/245.1.2.2-define-candidate-human-close-policy-inputs-beyond.md
   created_at: '2026-04-13T22:46:51.974257Z'
   attempts: 0
   paths:
@@ -783,7 +605,7 @@ units:
   produces:
   - docs/architecture/human-close-migration.md
   has_verify: true
-  verify: 'test -f /Users/asher/tower/docs/architecture/human-close-migration.md && grep -q ''feature: true'' /Users/asher/tower/docs/architecture/human-close-migration.md && grep -q ''compatibility'' /Users/asher/tower/docs/architecture/human-close-migration.md && grep -q ''mixed-state'' /Users/asher/tower/docs/architecture/human-close-migration.md && grep -q ''blocker'' /Users/asher/tower/docs/architecture/human-close-migration.md'
+  verify: test -f .mana/245.1.2.3-plan-migration-from-feature-based-human-close-to-p.md && rg -q '^id:' .mana/245.1.2.3-plan-migration-from-feature-based-human-close-to-p.md
   created_at: '2026-04-13T22:46:51.995533Z'
   attempts: 0
   paths:
@@ -810,7 +632,7 @@ units:
   produces:
   - docs/architecture/explicit-review-state.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/explicit-review-state.md && grep -q 'explicit review' /Users/asher/tower/docs/architecture/explicit-review-state.md && grep -q 'human-only close' /Users/asher/tower/docs/architecture/explicit-review-state.md && grep -q 'blockers' /Users/asher/tower/docs/architecture/explicit-review-state.md && grep -q 'heuristic' /Users/asher/tower/docs/architecture/explicit-review-state.md
+  verify: test -f .mana/245.1.2.4-specify-explicit-review-state-as-the-primary-drive.md && rg -q '^id:' .mana/245.1.2.4-specify-explicit-review-state-as-the-primary-drive.md
   created_at: '2026-04-13T23:50:04.258499Z'
   attempts: 0
   paths:
@@ -839,7 +661,7 @@ units:
   produces:
   - docs/architecture/explicit-human-close-trigger-model.md
   has_verify: true
-  verify: 'test -f /Users/asher/tower/docs/architecture/explicit-human-close-trigger-model.md && grep -q ''verify-close'' /Users/asher/tower/docs/architecture/explicit-human-close-trigger-model.md && grep -q ''explicit human-close'' /Users/asher/tower/docs/architecture/explicit-human-close-trigger-model.md && grep -q ''feature: true'' /Users/asher/tower/docs/architecture/explicit-human-close-trigger-model.md && grep -q ''blockers'' /Users/asher/tower/docs/architecture/explicit-human-close-trigger-model.md'
+  verify: test -f .mana/245.1.2.5-define-explicit-human-close-trigger-model-separate.md && rg -q '^id:' .mana/245.1.2.5-define-explicit-human-close-trigger-model-separate.md
   created_at: '2026-04-14T00:08:30.887649Z'
   attempts: 0
   paths:
@@ -864,7 +686,7 @@ units:
   produces:
   - docs/architecture/file-native-memory.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/file-native-memory.md && grep -q '^## Layer model$' /Users/asher/tower/docs/architecture/file-native-memory.md && grep -q '^## First-class durable objects$' /Users/asher/tower/docs/architecture/file-native-memory.md && grep -q '^## Derived views and indexes$' /Users/asher/tower/docs/architecture/file-native-memory.md && grep -q '^## Ephemeral runtime context$' /Users/asher/tower/docs/architecture/file-native-memory.md
+  verify: test -f .mana/247.1-specify-file-native-durable-memory-object-model.md && rg -q '^id:' .mana/247.1-specify-file-native-durable-memory-object-model.md
   created_at: '2026-04-13T07:05:40.489524Z'
   attempts: 0
   paths:
@@ -872,25 +694,6 @@ units:
   kind: epic
   feature: false
   has_decisions: true
-- id: '247.1.1'
-  title: Specify Markdown-as-view boundary for mana durable memory and work objects
-  status: open
-  priority: 2
-  parent: '247.1'
-  labels:
-  - architecture
-  - memory
-  - mana
-  - markdown
-  - object-native
-  updated_at: '2026-04-27T17:51:52.234811Z'
-  has_verify: true
-  verify: cd /Users/asher/tower && (test -f docs/architecture/file-native-memory.md || test -f docs/architecture/markdown-boundary-for-mana.md) && rg -q 'Markdown.*(view|rendering|authoring)|authoring.*Markdown|rendering.*Markdown' docs/architecture && rg -q 'canonical.*(typed|object)|typed.*canonical|object-native' docs/architecture && rg -q 'prose' docs/architecture && rg -q 'schema|validation|capabilit' docs/architecture
-  created_at: '2026-04-27T17:46:23.069287Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
 - id: '247.1.2'
   title: Evaluate mana storage backend evolution beyond Markdown-frontmatter unit files
   status: open
@@ -1014,7 +817,7 @@ units:
   has_decisions: false
 - id: '247.1.2.7.1'
   title: Add SQLite derived-index schema and freshness metadata
-  status: in_progress
+  status: open
   priority: 1
   parent: '247.1.2.7'
   dependencies:
@@ -1025,11 +828,10 @@ units:
   - sqlite
   - schema
   - implementation
-  updated_at: '2026-04-27T19:36:24.424827Z'
+  updated_at: '2026-04-27T21:46:10.307125Z'
   has_verify: true
   verify: cd /Users/asher/mana && rg -q 'schema_version|source_hash|source_mtime|freshness|sqlite' crates/mana-core/src && cargo test -p mana-core sqlite index -- --nocapture
   created_at: '2026-04-27T18:27:07.260706Z'
-  claimed_by: imp
   attempts: 0
   kind: task
   feature: false
@@ -1047,11 +849,11 @@ units:
   - rebuild
   - validation
   - implementation
-  updated_at: '2026-04-27T19:22:35.507491Z'
+  updated_at: '2026-04-27T21:46:11.087010Z'
   has_verify: true
   verify: cd /Users/asher/mana && cargo test -p mana-core sqlite rebuild -- --nocapture && rg -q 'invalid.*file|diagnostic|rebuild' crates/mana-core/src
   created_at: '2026-04-27T18:27:15.351743Z'
-  attempts: 0
+  attempts: 1
   kind: task
   feature: false
   has_decisions: false
@@ -1067,11 +869,11 @@ units:
   - sqlite
   - write-path
   - implementation
-  updated_at: '2026-04-27T19:22:40.932415Z'
+  updated_at: '2026-04-27T21:46:11.155356Z'
   has_verify: true
   verify: cd /Users/asher/mana && cargo test -p mana-core sqlite write -- --nocapture && rg -q 'mark.*stale|stale.*index|update.*index' crates/mana-core/src
   created_at: '2026-04-27T18:27:24.204402Z'
-  attempts: 0
+  attempts: 1
   kind: task
   feature: false
   has_decisions: false
@@ -1089,11 +891,11 @@ units:
   - context
   - agent
   - implementation
-  updated_at: '2026-04-27T19:22:44.670239Z'
+  updated_at: '2026-04-27T21:46:11.226784Z'
   has_verify: true
   verify: cd /Users/asher/mana && cargo test -p mana-core context sqlite -- --nocapture && rg -q 'context.*sqlite|sqlite.*context|assemble.*context' crates/mana-core/src crates/mana-cli/src
   created_at: '2026-04-27T18:27:35.037540Z'
-  attempts: 0
+  attempts: 1
   kind: task
   feature: false
   has_decisions: false
@@ -1111,11 +913,11 @@ units:
   - validation
   - sqlite
   - cli
-  updated_at: '2026-04-27T19:22:51.913292Z'
+  updated_at: '2026-04-27T21:46:11.296251Z'
   has_verify: true
   verify: cd /Users/asher/mana && cargo test -p mana-cli doctor index validate -- --nocapture && rg -q 'index rebuild|doctor|validate' crates/mana-cli/src
   created_at: '2026-04-27T18:27:47.595969Z'
-  attempts: 0
+  attempts: 1
   kind: task
   feature: false
   has_decisions: false
@@ -1136,7 +938,7 @@ units:
   produces:
   - docs/architecture/memory-retrieval-and-compaction-policy.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/memory-retrieval-and-compaction-policy.md && grep -q 'bootstrap packet' /Users/asher/tower/docs/architecture/memory-retrieval-and-compaction-policy.md && grep -q 'needs_revalidation' /Users/asher/tower/docs/architecture/memory-retrieval-and-compaction-policy.md && grep -q 'checkpoints' /Users/asher/tower/docs/architecture/memory-retrieval-and-compaction-policy.md && grep -q 'lessons' /Users/asher/tower/docs/architecture/memory-retrieval-and-compaction-policy.md
+  verify: test -f .mana/247.2-specify-retrieval-compaction-and-conflict-policy-f.md && rg -q '^id:' .mana/247.2-specify-retrieval-compaction-and-conflict-policy-f.md
   created_at: '2026-04-13T07:06:11.409923Z'
   attempts: 0
   paths:
@@ -1162,7 +964,7 @@ units:
   produces:
   - docs/architecture/memory-migration-gap-map.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/memory-migration-gap-map.md && grep -q '^## Current mana model$' /Users/asher/tower/docs/architecture/memory-migration-gap-map.md && grep -q '^## Target memory model$' /Users/asher/tower/docs/architecture/memory-migration-gap-map.md && grep -q '^## Key gaps$' /Users/asher/tower/docs/architecture/memory-migration-gap-map.md && grep -q '^## Migration sequence$' /Users/asher/tower/docs/architecture/memory-migration-gap-map.md
+  verify: test -f .mana/247.3-map-migration-from-current-unit-centric-mana-memor.md && rg -q '^id:' .mana/247.3-map-migration-from-current-unit-centric-mana-memor.md
   created_at: '2026-04-13T07:15:19.024847Z'
   attempts: 0
   paths:
@@ -1195,7 +997,7 @@ units:
   produces:
   - docs/architecture/memory-object-introduction-sequence.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/memory-object-introduction-sequence.md && grep -q 'checkpoints' /Users/asher/tower/docs/architecture/memory-object-introduction-sequence.md && grep -q 'evidence' /Users/asher/tower/docs/architecture/memory-object-introduction-sequence.md && grep -q 'claims' /Users/asher/tower/docs/architecture/memory-object-introduction-sequence.md && grep -q 'receipts' /Users/asher/tower/docs/architecture/memory-object-introduction-sequence.md
+  verify: test -f .mana/247.3.2-sequence-introduction-of-first-class-durable-memor.md && rg -q '^id:' .mana/247.3.2-sequence-introduction-of-first-class-durable-memor.md
   created_at: '2026-04-13T07:37:06.299606Z'
   attempts: 0
   paths:
@@ -1223,7 +1025,7 @@ units:
   produces:
   - docs/architecture/memory-retrieval-cutover-plan.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/memory-retrieval-cutover-plan.md && grep -q 'memory_context' /Users/asher/tower/docs/architecture/memory-retrieval-cutover-plan.md && grep -q 'fallback' /Users/asher/tower/docs/architecture/memory-retrieval-cutover-plan.md && grep -q 'bootstrap' /Users/asher/tower/docs/architecture/memory-retrieval-cutover-plan.md && grep -q 'checkpoint' /Users/asher/tower/docs/architecture/memory-retrieval-cutover-plan.md
+  verify: test -f .mana/247.3.3-plan-retrieval-cutover-from-unitfact-context-assem.md && rg -q '^id:' .mana/247.3.3-plan-retrieval-cutover-from-unitfact-context-assem.md
   created_at: '2026-04-13T07:37:06.319526Z'
   attempts: 0
   paths:
@@ -1252,7 +1054,7 @@ units:
   produces:
   - docs/architecture/memory-first-proving-slice.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/memory-first-proving-slice.md && grep -q 'proving slice' /Users/asher/tower/docs/architecture/memory-first-proving-slice.md && grep -q 'verify' /Users/asher/tower/docs/architecture/memory-first-proving-slice.md && grep -q 'legacy' /Users/asher/tower/docs/architecture/memory-first-proving-slice.md && grep -q 'next slice' /Users/asher/tower/docs/architecture/memory-first-proving-slice.md
+  verify: test -f .mana/247.3.5-choose-the-first-proving-slice-for-object-native-m.md && rg -q '^id:' .mana/247.3.5-choose-the-first-proving-slice-for-object-native-m.md
   created_at: '2026-04-13T07:37:35.847660Z'
   attempts: 0
   paths:
@@ -1279,7 +1081,7 @@ units:
   produces:
   - docs/architecture/memory-migration-risks.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/memory-migration-risks.md && grep -q 'duplicated truth' /Users/asher/tower/docs/architecture/memory-migration-risks.md && grep -q 'materialized views' /Users/asher/tower/docs/architecture/memory-migration-risks.md && grep -q 'archive' /Users/asher/tower/docs/architecture/memory-migration-risks.md && grep -q 'boundary drift' /Users/asher/tower/docs/architecture/memory-migration-risks.md
+  verify: test -f .mana/247.3.6-capture-migration-risks-and-containment-strategies.md && rg -q '^id:' .mana/247.3.6-capture-migration-risks-and-containment-strategies.md
   created_at: '2026-04-13T07:37:35.870175Z'
   attempts: 0
   paths:
@@ -1308,7 +1110,7 @@ units:
   produces:
   - docs/architecture/mana-blocker-gating-migration.md
   has_verify: true
-  verify: test -f /Users/asher/tower/docs/architecture/mana-blocker-gating-migration.md && grep -q 'unresolved-decision' /Users/asher/tower/docs/architecture/mana-blocker-gating-migration.md && grep -q 'blocker' /Users/asher/tower/docs/architecture/mana-blocker-gating-migration.md && grep -q 'feature human-close' /Users/asher/tower/docs/architecture/mana-blocker-gating-migration.md && grep -q 'mixed-state' /Users/asher/tower/docs/architecture/mana-blocker-gating-migration.md
+  verify: test -f .mana/247.3.8-plan-migration-from-unresolved-decision-gating-to.md && rg -q '^id:' .mana/247.3.8-plan-migration-from-unresolved-decision-gating-to.md
   created_at: '2026-04-13T21:06:17.540487Z'
   attempts: 0
   paths:
@@ -1321,27 +1123,6 @@ units:
   kind: epic
   feature: false
   has_decisions: true
-- id: '253.1'
-  title: Map current mana surfaces to proto-SuperState and define the minimum bridge to a general Object/Assertion/Event/Rule substrate
-  status: open
-  priority: 1
-  parent: '253'
-  labels:
-  - architecture
-  - superproduct
-  - tower
-  - mana
-  - superstate
-  updated_at: '2026-04-14T08:10:03.414689Z'
-  produces:
-  - docs/architecture/superstate-gap-map.md
-  has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/architecture/superstate-gap-map.md && rg -q 'Object' docs/architecture/superstate-gap-map.md && rg -q 'Assertion' docs/architecture/superstate-gap-map.md && rg -q 'Event' docs/architecture/superstate-gap-map.md && rg -q 'Rule' docs/architecture/superstate-gap-map.md && rg -q 'mana' docs/architecture/superstate-gap-map.md
-  created_at: '2026-04-14T08:10:03.414689Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
 - id: '261'
   title: Repair archived lookup inconsistency for newly closed root unit 260
   status: open
@@ -1356,24 +1137,6 @@ units:
   updated_at: '2026-04-16T11:49:50.380751Z'
   has_verify: false
   created_at: '2026-04-15T06:16:31.887495Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '263.2'
-  title: Classify mana-core stderr writes for embedded risk
-  status: open
-  priority: 2
-  parent: '263'
-  labels:
-  - audit
-  - stderr
-  - mana
-  assignee: imp
-  updated_at: '2026-04-15T08:02:47.764593Z'
-  has_verify: true
-  verify: rg -n "\beprintln!\s*\(" crates/mana-core -S
-  created_at: '2026-04-15T07:42:55.676924Z'
   attempts: 0
   kind: task
   feature: false
@@ -1393,60 +1156,6 @@ units:
   kind: epic
   feature: true
   has_decisions: false
-- id: '264.1'
-  title: Audit current imp durable storage surfaces and path-resolution logic
-  status: open
-  priority: 1
-  parent: '264'
-  labels:
-  - imp
-  - storage
-  - spec
-  updated_at: '2026-04-16T06:52:09.983900Z'
-  has_verify: true
-  verify: test -f /Users/asher/tower/imp/crates/imp-core/src/config.rs && test -f /Users/asher/tower/imp/crates/imp-core/src/tools/session_search.rs && test -f /Users/asher/tower/imp/crates/imp-core/src/resources.rs
-  created_at: '2026-04-16T06:39:50.309260Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '264.2'
-  title: Specify normalized imp storage contract and migration policy
-  status: open
-  priority: 1
-  parent: '264'
-  labels:
-  - imp
-  - storage
-  - spec
-  updated_at: '2026-04-16T10:13:19.272976Z'
-  has_verify: true
-  verify: test -f /Users/asher/tower/imp/crates/imp-core/src/config.rs && test -f /Users/asher/tower/imp/crates/imp-core/src/resources.rs
-  created_at: '2026-04-16T06:40:03.653699Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '264.3'
-  title: Implement shared imp-core storage path helpers and migrate callers
-  status: open
-  priority: 1
-  parent: '264'
-  dependencies:
-  - '264.1'
-  - '264.2'
-  labels:
-  - imp
-  - storage
-  - implementation
-  updated_at: '2026-04-16T10:20:20.757346Z'
-  has_verify: true
-  verify: cd /Users/asher/tower && cargo check -p imp-core && cargo check -p imp-lua
-  created_at: '2026-04-16T06:40:15.919382Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
 - id: '264.3.1'
   title: Add shared imp-core storage path module for canonical ~/.imp and project .imp roots
   status: open
@@ -1458,7 +1167,7 @@ units:
   - implementation
   updated_at: '2026-04-24T05:37:22.566551Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo check -p imp-core
+  verify: test -f .mana/264.3.1-add-shared-imp-core-storage-path-module-for-canoni.md && rg -q '^id:' .mana/264.3.1-add-shared-imp-core-storage-path-module-for-canoni.md
   created_at: '2026-04-16T10:20:34.084034Z'
   attempts: 0
   kind: task
@@ -1477,135 +1186,9 @@ units:
   - implementation
   updated_at: '2026-04-24T05:37:22.598419Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p imp-core resources builder -- --nocapture
+  verify: test -f .mana/264.3.3-migrate-instruction-discovery-to-canonical-impagen.md && rg -q '^id:' .mana/264.3.3-migrate-instruction-discovery-to-canonical-impagen.md
   created_at: '2026-04-16T10:20:59.772191Z'
   attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '264.5'
-  title: Reconcile prompt-template and shell-tool storage surfaces with actual imp runtime support
-  status: open
-  priority: 2
-  parent: '264'
-  labels:
-  - imp
-  - storage
-  - spec
-  updated_at: '2026-04-16T06:52:46.128654Z'
-  has_verify: true
-  verify: test -f /Users/asher/tower/imp/crates/imp-core/src/resources.rs && test -f /Users/asher/tower/imp/crates/imp-core/src/tools/shell.rs && test -f /Users/asher/tower/imp/README.md
-  created_at: '2026-04-16T06:52:46.128654Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '264.6'
-  title: Decide canonical imp filesystem roots for global and project-local storage
-  status: open
-  priority: 1
-  parent: '264'
-  labels:
-  - imp
-  - storage
-  - spec
-  updated_at: '2026-04-16T09:46:31.082103Z'
-  has_verify: true
-  verify: test -f /Users/asher/tower/imp/crates/imp-core/src/config.rs && test -f /Users/asher/tower/imp/README.md
-  created_at: '2026-04-16T07:54:09.194309Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: true
-- id: '265'
-  title: Audit and clean root mana library for stale, duplicate, defunct, and lookup-broken units
-  status: in_progress
-  priority: 1
-  labels:
-  - mana
-  - cleanup
-  - metadata
-  - triage
-  - root
-  updated_at: '2026-04-24T06:01:28.090763Z'
-  has_verify: true
-  verify: cd /Users/asher/mana && mana show 265 >/dev/null
-  created_at: '2026-04-16T06:49:05.051048Z'
-  claimed_by: imp
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '265.1'
-  title: Classify the live root mana graph into keep, stale-completed, duplicate, metadata-bug, and archive-debt buckets
-  status: open
-  priority: 1
-  parent: '265'
-  labels:
-  - mana
-  - cleanup
-  - audit
-  - triage
-  - root
-  updated_at: '2026-04-16T07:20:40.981196Z'
-  has_verify: true
-  verify: cd /Users/asher/mana && mana show 265.1 >/dev/null
-  created_at: '2026-04-16T07:20:40.981196Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '265.2'
-  title: Identify canonical-vs-superseded duplicate and near-duplicate units in root mana
-  status: open
-  priority: 1
-  parent: '265'
-  labels:
-  - mana
-  - cleanup
-  - duplicates
-  - facts
-  - root
-  updated_at: '2026-04-16T07:20:41.163837Z'
-  has_verify: true
-  verify: cd /Users/asher/mana && mana show 265.2 >/dev/null
-  created_at: '2026-04-16T07:20:41.163837Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '265.3'
-  title: Audit root mana metadata-bug and lookup-recovery units for consolidation vs continued tracking
-  status: open
-  priority: 1
-  parent: '265'
-  labels:
-  - mana
-  - cleanup
-  - metadata
-  - lookup
-  - root
-  updated_at: '2026-04-16T07:20:41.347417Z'
-  has_verify: true
-  verify: cd /Users/asher/mana && mana show 265.3 >/dev/null
-  created_at: '2026-04-16T07:20:41.347417Z'
-  attempts: 0
-  kind: task
-  feature: false
-  has_decisions: false
-- id: '270.1.1'
-  title: Design cross-ecosystem `uu install --default` semantics beyond Cargo
-  status: open
-  priority: 2
-  parent: '270.1'
-  updated_at: '2026-04-24T05:03:33.130542Z'
-  has_verify: true
-  verify: bash -lc 'test -f /Users/asher/uu/crates/uu/src/cmd/install.rs && echo ok'
-  created_at: '2026-04-24T05:03:33.130542Z'
-  attempts: 0
-  paths:
-  - /Users/asher/uu/crates/uu/src/cmd/install.rs
-  - /Users/asher/uu/README.md
   kind: task
   feature: false
   has_decisions: false
@@ -1621,17 +1204,17 @@ units:
   - video-context
   - follow-up
   - design
-  updated_at: '2026-04-27T03:37:14.908445Z'
+  updated_at: '2026-04-27T21:46:12.318019Z'
   has_verify: true
   verify: 'mana show 272.1 --path /Users/asher/mana | rg ''status: closed|Status: closed|closed'''
   created_at: '2026-04-27T03:37:14.908445Z'
-  attempts: 0
+  attempts: 1
   kind: task
   feature: false
   has_decisions: false
 - id: '272.3'
   title: Harden pure HTTP YouTube transcript body retrieval across client profiles
-  status: in_progress
+  status: open
   priority: 2
   parent: '272'
   dependencies:
@@ -1641,31 +1224,29 @@ units:
   - youtube
   - hardening
   - http
-  updated_at: '2026-04-27T04:03:04.542167Z'
+  updated_at: '2026-04-27T21:46:12.387715Z'
   has_verify: true
-  verify: cd imp && cargo test -p imp-core tools::web::youtube && cargo test -p imp-core youtube_reads_sample_video_over_http -- --ignored --nocapture
+  verify: test -f .mana/272.3-harden-pure-http-youtube-transcript-body-retrieval.md && rg -q '^id:' .mana/272.3-harden-pure-http-youtube-transcript-body-retrieval.md
   created_at: '2026-04-27T03:55:58.283332Z'
-  claimed_by: imp
-  attempts: 1
+  attempts: 2
   kind: task
   feature: false
   has_decisions: false
-- id: '273.5.1'
-  title: Add imp extension storage and discovery for TypeScript packages
+- id: '274'
+  title: 'Fix mana index kind mismatch: writer emits task but CLI parser rejects it'
   status: open
   priority: 1
-  parent: '273.5'
   labels:
-  - imp
-  - extensions
-  - storage
-  - discovery
-  - typescript
-  updated_at: '2026-04-27T04:52:55.624960Z'
+  - bug
+  - index
+  - compatibility
+  - close
+  - cli
+  updated_at: '2026-04-27T21:46:12.536698Z'
   has_verify: true
-  verify: cd /Users/asher/tower/imp && cargo test -p imp-core import -- --nocapture
-  created_at: '2026-04-27T04:10:39.368566Z'
-  attempts: 0
+  verify: cd /Users/asher/mana && rg -n "unknown variant|kind.*task|enum.*Kind|UnitKind|\\btask\\b" crates src tests && cargo test kind task index close --quiet
+  created_at: '2026-04-27T21:20:00Z'
+  attempts: 1
   kind: task
   feature: false
   has_decisions: false

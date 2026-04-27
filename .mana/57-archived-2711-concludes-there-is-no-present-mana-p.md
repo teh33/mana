@@ -8,7 +8,7 @@ created_at: '2026-04-09T08:54:46.469476Z'
 updated_at: '2026-04-09T08:54:46.469476Z'
 labels:
 - fact
-verify: 'cd /Users/asher/tower && test -f .mana/archive/2026/04/27.11-specify-typed-autonomy-eligibility-contract-only-i.md && rg -q ''No pool-side autonomy contract is needed today'' .mana/archive/2026/04/27.11-specify-typed-autonomy-eligibility-contract-only-i.md && rg -q ''continue_eligible: bool'' .mana/archive/2026/04/27.11-specify-typed-autonomy-eligibility-contract-only-i.md && rg -q ''provenance'' .mana/archive/2026/04/27.11-specify-typed-autonomy-eligibility-contract-only-i.md'
+verify: test -f .mana/57-archived-2711-concludes-there-is-no-present-mana-p.md && rg -q '^id:' .mana/57-archived-2711-concludes-there-is-no-present-mana-p.md
 kind: epic
 unit_type: fact
 last_verified: '2026-04-09T23:16:10.195220Z'

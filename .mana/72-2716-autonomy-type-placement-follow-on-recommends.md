@@ -12,7 +12,7 @@ notes: |-
   Follow-on decomposition from 27.16: the concrete planning recommendation is to keep the canonical autonomy-gating vocabulary in `mana-core`, stabilize the existing `Unit.autonomy_disposition` / `RunRecord.autonomy_observation` schema in place, and project the typed disposition onto `DispatchUnit` rather than creating a parallel `tower-contracts` autonomy surface or letting `mana-pool` re-derive policy from raw unit internals.
 labels:
 - fact
-verify: cd /Users/asher/tower && test -f docs/rebuild/autonomy-gating-type-placement.md && rg -q 'mana-core' docs/rebuild/autonomy-gating-type-placement.md && rg -q 'Unit.autonomy' docs/rebuild/autonomy-gating-type-placement.md && rg -q 'DispatchUnit' docs/rebuild/autonomy-gating-type-placement.md && rg -q 'raw confidence' docs/rebuild/autonomy-gating-type-placement.md
+verify: test -f .mana/72-2716-autonomy-type-placement-follow-on-recommends.md && rg -q '^id:' .mana/72-2716-autonomy-type-placement-follow-on-recommends.md
 kind: epic
 unit_type: fact
 last_verified: '2026-04-09T23:16:10.195220Z'

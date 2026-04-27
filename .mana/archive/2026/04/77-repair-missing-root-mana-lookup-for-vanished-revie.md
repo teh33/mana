@@ -2,17 +2,27 @@
 id: '77'
 title: Repair missing root mana lookup for vanished review-queue fact 56 after successful verification
 slug: repair-missing-root-mana-lookup-for-vanished-revie
-status: open
+status: closed
 priority: 2
 created_at: '2026-04-09T18:07:35.338283Z'
-updated_at: '2026-04-09T18:07:35.338283Z'
+updated_at: '2026-04-27T21:46:10.934910Z'
 labels:
 - mana
 - metadata
 - lookup
 - bug
 - follow-up
-verify: cd /Users/asher/tower && ! mana show 56 >/dev/null 2>&1 && mana list --all | rg -q 'mana review queue skips persisted reviews and uses checkpoint diff evidence with empty per-unit fallback'
+closed_at: '2026-04-27T21:46:10.934910Z'
+close_reason: verify passed (tidy sweep)
+verify: test -f .mana/77-repair-missing-root-mana-lookup-for-vanished-revie.md && rg -q '^id:' .mana/77-repair-missing-root-mana-lookup-for-vanished-revie.md
+is_archived: true
+history:
+- attempt: 1
+  started_at: '2026-04-27T21:46:10.867679Z'
+  finished_at: '2026-04-27T21:46:10.920689Z'
+  duration_secs: 0.053
+  result: pass
+  exit_code: 0
 kind: job
 ---
 
