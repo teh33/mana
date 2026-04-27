@@ -40,6 +40,7 @@ Commands:
     next         Recommend the best unit to work on next
     tree         Show hierarchical tree of units
     context      Output context for a task, epic, or memory (no args)
+    search       Search the mana system for a unit ID
 
   AGENTS
     run          Dispatch ready tasks to agents
@@ -277,6 +278,24 @@ Examples:
         /// Search titles, descriptions, and notes by keyword
         #[arg(long)]
         search: Option<String>,
+    },
+
+    /// Search the mana system for a unit ID
+    ///
+    /// Searches the current mana ecosystem, including nested project `.mana/`
+    /// directories, for an exact unit ID match.
+    #[command(display_order = 12)]
+    Search {
+        /// Unit ID
+        id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Force human-readable output even when piped
+        #[arg(long = "no-json", conflicts_with = "json")]
+        no_json: bool,
     },
 
     /// Edit unit in $EDITOR

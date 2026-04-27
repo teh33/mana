@@ -33,9 +33,9 @@ use mana::commands::{
     cmd_create, cmd_delete, cmd_dep_add, cmd_dep_list, cmd_dep_remove, cmd_diff, cmd_doctor,
     cmd_edit, cmd_fact, cmd_graph, cmd_init, cmd_list, cmd_locks, cmd_locks_clear, cmd_logs,
     cmd_mcp_serve, cmd_memory_context, cmd_move_from, cmd_move_to, cmd_mutate, cmd_next,
-    cmd_onboard, cmd_plan, cmd_quick, cmd_recall, cmd_release, cmd_reopen, cmd_run, cmd_show,
-    cmd_stats, cmd_status, cmd_sync, cmd_tidy, cmd_trace, cmd_tree, cmd_trust, cmd_unarchive,
-    cmd_update, cmd_verify, cmd_verify_facts,
+    cmd_onboard, cmd_plan, cmd_quick, cmd_recall, cmd_release, cmd_reopen, cmd_run, cmd_search,
+    cmd_show, cmd_stats, cmd_status, cmd_sync, cmd_tidy, cmd_trace, cmd_tree, cmd_trust,
+    cmd_unarchive, cmd_update, cmd_verify, cmd_verify_facts,
     review::{cmd_review, ReviewArgs},
     review_human::cmd_review_human,
 };
@@ -479,6 +479,11 @@ fn main() -> Result<()> {
                 format.as_deref(),
                 &mana_dir,
             )
+        }
+
+        Command::Search { id, json, no_json } => {
+            validate_unit_id(&id)?;
+            cmd_search(&id, &env::current_dir()?, auto_json(json, no_json))
         }
 
         Command::Update {
