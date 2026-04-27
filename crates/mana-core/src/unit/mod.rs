@@ -304,7 +304,7 @@ fn is_default_unit_type(v: &str) -> bool {
 }
 
 fn default_unit_type_kind() -> UnitType {
-    UnitType::Epic
+    UnitType::Task
 }
 
 fn infer_unit_type(kind: Option<UnitType>, unit_type: &str, verify: Option<&str>) -> UnitType {
@@ -1301,7 +1301,7 @@ verify: cargo test
         let unit = Unit::new("1", "Defaults");
         assert_eq!(unit.status, Status::Open);
         assert_eq!(unit.priority, 2);
-        assert_eq!(unit.kind, UnitType::Epic);
+        assert_eq!(unit.kind, UnitType::Task);
         assert!(unit.labels.is_empty());
         assert!(unit.dependencies.is_empty());
         assert!(unit.description.is_none());

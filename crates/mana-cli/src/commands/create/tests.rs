@@ -467,7 +467,7 @@ fn create_updates_index() {
     assert_eq!(index.units.len(), 1);
     assert_eq!(index.units[0].id, "1");
     assert_eq!(index.units[0].title, "Indexed unit");
-    assert_eq!(index.units[0].kind, UnitType::Epic);
+    assert_eq!(index.units[0].kind, UnitType::Task);
 }
 
 #[test]

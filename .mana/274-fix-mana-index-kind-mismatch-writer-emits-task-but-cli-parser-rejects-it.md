@@ -5,8 +5,9 @@ slug: fix-mana-index-kind-mismatch-writer-emits-task-but-cli-parser-rejects-it
 status: open
 priority: 1
 created_at: '2026-04-27T21:20:00Z'
-updated_at: '2026-04-27T21:46:12.536698Z'
-notes: |2
+updated_at: '2026-04-27T23:29:58.226922Z'
+acceptance: Unit 274 is inspected and either claimed for implementation with a corrected verify gate or explicitly deferred with notes explaining why.
+notes: |2-
 
   ## Attempt 1 — 2026-04-27T21:46:12Z
   Exit code: 2
@@ -116,6 +117,11 @@ notes: |2
   rg: src: No such file or directory (os error 2)
   rg: tests: No such file or directory (os error 2)
   ```
+
+
+  ---
+  2026-04-27T23:29:58.226918+00:00
+  Recommended next feature/bug work after the SQLite stack is verified/published: inspect and likely execute this priority-1 compatibility fix. Context from cleanup: mana metadata now emits `kind: task` broadly, and prior status showed this unit specifically tracks parser/index compatibility around `task` vs older `job` naming. Do not start until pre-push verification/publication decision is settled unless user explicitly interrupts that flow.
 labels:
 - bug
 - index
@@ -175,7 +181,7 @@ history:
     crates/mana-cli/src/commands/run/plan.rs:529:        unit.to_file(mana_dir.join("1-task-one.md")).unwrap();
     rg: src: No such file or directory (os error 2)
     rg: tests: No such file or directory (os error 2)
-kind: job
+kind: task
 ---
 
 Goal: Fix the mana CLI/index compatibility bug where mana-generated indexes contain `kind: task`, but the installed CLI parser rejects `task` and only accepts `epic`, `job`, and `fact`.
