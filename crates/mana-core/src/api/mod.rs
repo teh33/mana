@@ -56,7 +56,7 @@ use crate::error::{ManaError, ManaResult};
 /// Core unit type representing a single work item.
 pub use crate::unit::{
     AttemptOutcome, AttemptRecord, AutonomyObservation, AutonomyProvenance, OnCloseAction,
-    OnFailAction, RunRecord, RunResult, Status, Unit, UnitKind, VisibilityState,
+    OnFailAction, RunRecord, RunResult, Status, Unit, UnitType, VisibilityState,
 };
 
 /// Index types for working with the unit cache.
@@ -142,8 +142,8 @@ pub struct TreeNode {
     pub priority: u8,
     /// Whether the unit has a verify command.
     pub has_verify: bool,
-    /// Explicit schema kind.
-    pub kind: UnitKind,
+    /// Explicit unit type.
+    pub kind: UnitType,
     /// Child nodes (units whose `parent` field is this unit's ID).
     pub children: Vec<TreeNode>,
 }
@@ -422,7 +422,7 @@ pub fn get_stats(mana_dir: &Path) -> Result<StatsResult> {
 
 /// Return units with all dependencies satisfied (ready to dispatch).
 ///
-/// A unit is "ready" if it is an open dispatchable job and all of its
+/// A unit is "ready" if it is an open dispatchable task and all of its
 /// explicit dependency IDs are closed in the active index or archived.
 ///
 /// # Example
@@ -450,7 +450,7 @@ pub fn ready_units(index: &Index) -> Vec<&IndexEntry> {
         .iter()
         .filter(|e| {
             e.status == Status::Open
-                && e.kind == crate::unit::UnitKind::Job
+                && e.kind == crate::unit::UnitType::Task
                 && e.has_verify
                 && e.dependencies
                     .iter()

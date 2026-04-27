@@ -1173,7 +1173,7 @@ mod tests {
             claimed_by: None,
             attempts: 0,
             paths: vec![],
-            kind: crate::unit::UnitKind::Job,
+            kind: crate::unit::UnitType::Task,
             feature: false,
             has_decisions: false,
         }

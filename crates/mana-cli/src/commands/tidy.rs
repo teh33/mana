@@ -346,7 +346,7 @@ fn cmd_tidy_inner(
         .iter()
         .filter(|entry| {
             entry.status == Status::Open
-                && entry.kind == crate::unit::UnitKind::Job
+                && entry.kind == crate::unit::UnitType::Task
                 && entry.has_verify
         })
         .collect();

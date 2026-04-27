@@ -27,7 +27,7 @@ Usage: {usage}
 Commands:
   TASKS
     init         Initialize .mana/ in the current directory
-    create       Create a new job or epic [aliases: new]
+    create       Create a new task or epic [aliases: new]
     read         Display full unit details [aliases: show, view]
     list         List/search/filter units [aliases: ls]
     edit         Edit unit in $EDITOR
@@ -36,21 +36,21 @@ Commands:
     delete       Delete a unit and clean up references
 
   QUERY
-    status       Show project status: claimed, ready jobs, epics, and blocked units
+    status       Show project status: claimed, ready tasks, epics, and blocked units
     next         Recommend the best unit to work on next
     tree         Show hierarchical tree of units
-    context      Output context for a job, epic, or memory (no args)
+    context      Output context for a task, epic, or memory (no args)
 
   AGENTS
-    run          Dispatch ready jobs to agents
-    plan         Decompose an epic into smaller jobs
+    run          Dispatch ready tasks to agents
+    plan         Decompose an epic into smaller tasks
     agents       Show running and recently completed agents
     logs         View agent output from log files
     review       Post-close review of an implementation
     diff         Show git diff of what an agent changed
 
   MEMORY
-    fact         Create a verified fact (requires --verify)
+    fact         Create a verified fact
     verify-facts Re-verify all facts, detect staleness
 
   MAINTENANCE
@@ -150,7 +150,7 @@ Examples:
         dir: std::path::PathBuf,
     },
 
-    /// Create a new job or epic
+    /// Create a new task or epic
     ///
     /// Every unit needs a verify gate (--verify) — a shell command that must exit 0
     /// to close the unit. The --description is the agent's prompt when dispatched via
@@ -480,7 +480,7 @@ Examples:
         command: DepCommand,
     },
     // -- QUERY --
-    /// Show project status: claimed, ready jobs, epics, and blocked units
+    /// Show project status: claimed, ready tasks, epics, and blocked units
     ///
     /// Quick overview of what's in flight, what's ready for dispatch, and what's
     /// waiting on dependencies. Start here to understand project state.
@@ -521,7 +521,7 @@ Examples:
         no_json: bool,
     },
 
-    /// Output context for a job, epic, or memory context (no args)
+    /// Output context for a task, epic, or memory context (no args)
     ///
     /// With a unit ID: outputs complete agent context — unit spec, verify command,
     /// previous attempts, project rules, dependency context, and referenced file
@@ -784,7 +784,7 @@ Examples:
         children: Vec<String>,
     },
 
-    /// Dispatch ready jobs to agents
+    /// Dispatch ready tasks to agents
     ///
     /// Without an ID, finds all ready units (open, no unresolved deps) and spawns
     /// agents in parallel up to -j limit. With an ID, dispatches that specific unit.
@@ -836,7 +836,7 @@ Examples:
         review: bool,
     },
 
-    /// Decompose an epic into smaller jobs
+    /// Decompose an epic into smaller tasks
     ///
     /// Breaks a unit into smaller child units with proper dependencies.
     /// Each child should be completable by a fast, non-thinking model
@@ -933,7 +933,7 @@ Model keys:
     },
 
     // -- MEMORY --
-    /// Create a verified fact (requires --verify)
+    /// Create a verified fact
     ///
     /// Facts are verified truths about the project that persist across agent sessions.
     /// Each fact has a verify command that proves it's still true, and a TTL (default
@@ -1380,7 +1380,7 @@ pub enum CreateSubcommand {
         #[arg(long)]
         run: bool,
 
-        /// Mark the new unit as an epic instead of a job (--epic)
+        /// Mark the new unit as an epic instead of a task (--epic)
         #[arg(long)]
         epic: bool,
 

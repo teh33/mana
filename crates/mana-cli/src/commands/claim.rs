@@ -17,7 +17,7 @@ pub fn cmd_claim(mana_dir: &Path, id: &str, by: Option<String>, force: bool) -> 
 
     if result.is_goal {
         eprintln!(
-            "Warning: Claiming an epic, not a job yet. Consider decomposing with: mana create \"child job\" --parent {} --verify \"test\"",
+            "Warning: Claiming an epic, not a task yet. Consider decomposing with: mana create \"child task\" --parent {} --verify \"test\"",
             id
         );
     }
@@ -169,7 +169,7 @@ mod tests {
     fn test_claim_unit_without_verify_succeeds_with_warning() {
         let (_dir, mana_dir) = setup_test_mana_dir();
 
-        // Create unit without verify (this looks like an epic, not a job yet)
+        // Create unit without verify (this looks like an epic, not a task yet)
         let unit = Unit::new("1", "Add authentication");
         // unit.verify is None by default
         unit.to_file(mana_dir.join("1.yaml")).unwrap();
@@ -187,7 +187,7 @@ mod tests {
     fn test_claim_unit_with_verify_succeeds() {
         let (_dir, mana_dir) = setup_test_mana_dir();
 
-        // Create unit with verify (this is a job)
+        // Create unit with verify (this is a task)
         let mut unit = Unit::new("1", "Add login endpoint");
         unit.verify = Some("cargo test login".to_string());
         unit.to_file(mana_dir.join("1.yaml")).unwrap();

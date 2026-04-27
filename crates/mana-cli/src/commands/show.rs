@@ -114,7 +114,7 @@ fn render_unit(
     }
 
     if !child_summaries.is_empty() {
-        println!("\n**Child Job Summaries**");
+        println!("\n**Child Task Summaries**");
         for child in child_summaries {
             let mut line = format!(
                 "- {} [{}] attempts={}",

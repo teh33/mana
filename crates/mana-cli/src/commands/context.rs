@@ -124,7 +124,7 @@ fn format_structure_block(structures: &[(&str, String)]) -> Option<String> {
     ))
 }
 
-/// Format child job summaries into a compact context section.
+/// Format child task summaries into a compact context section.
 fn format_child_summaries_section(
     children: &[mana_core::ops::context::ChildSummary],
 ) -> Option<String> {
@@ -133,7 +133,7 @@ fn format_child_summaries_section(
     }
 
     let mut s = String::new();
-    s.push_str("═══ Child Job Summaries ═════════════════════════════════════\n");
+    s.push_str("═══ Child Task Summaries ═════════════════════════════════════\n");
     for child in children {
         let mut line = format!(
             "{} [{}] attempts={}",
@@ -510,7 +510,7 @@ mod tests {
         }])
         .unwrap();
 
-        assert!(section.contains("Child Job Summaries"));
+        assert!(section.contains("Child Task Summaries"));
         assert!(section.contains("1.1 [open] attempts=2 recent=failed: Child"));
         assert!(section.contains("summary: Found a parser edge case"));
         assert!(section.contains("follow-up: 1 unresolved decision(s)"));

@@ -713,6 +713,7 @@ dependencies = [
  "glob",
  "libc",
  "mana-core",
+ "mana-pool",
  "mana-review",
  "project-detect",
  "regex",
@@ -744,6 +745,16 @@ dependencies = [
  "shell-escape",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "mana-pool"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mana-core",
+ "sysinfo",
+ "tempfile",
 ]
 
 [[package]]

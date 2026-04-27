@@ -24,7 +24,7 @@ use anyhow::Result;
 use crate::blocking::check_blocked_with_archive;
 use crate::discovery::find_unit_file;
 use crate::index::{ArchiveIndex, Index, IndexEntry};
-use crate::unit::{AutonomyBlockerCode, Status, Unit, UnitKind};
+use crate::unit::{AutonomyBlockerCode, Status, Unit, UnitType};
 use crate::util::natural_cmp;
 
 // ---------------------------------------------------------------------------
@@ -293,7 +293,7 @@ pub fn compute_ready_queue(
         .units
         .iter()
         .filter(|e| {
-            e.kind == UnitKind::Job
+            e.kind == UnitType::Task
                 && e.has_verify
                 && e.status == Status::Open
                 && (simulate || all_deps_closed(e, &index, &archive))
@@ -474,7 +474,7 @@ mod tests {
             claimed_by: None,
             attempts: 0,
             paths: vec![],
-            kind: crate::unit::UnitKind::Job,
+            kind: crate::unit::UnitType::Task,
             feature: false,
             has_decisions: false,
         }
@@ -566,14 +566,14 @@ mod tests {
         .save(&mana_dir)
         .unwrap();
 
-        let mut unit = Unit::new("2", "Dispatchable job with unresolved decisions");
-        unit.kind = UnitKind::Job;
+        let mut unit = Unit::new("2", "Dispatchable task with unresolved decisions");
+        unit.kind = UnitType::Task;
         unit.verify = Some("cargo test unresolved_decision_blocker".to_string());
         unit.decisions = vec![
             "JWT or sessions?".to_string(),
             "Which provider should be the default?".to_string(),
         ];
-        unit.to_file(mana_dir.join("2-dispatchable-job-with-unresolved-decisions.md"))
+        unit.to_file(mana_dir.join("2-dispatchable-task-with-unresolved-decisions.md"))
             .unwrap();
 
         let queue = compute_ready_queue(&mana_dir, None, false).unwrap();
@@ -638,14 +638,15 @@ mod tests {
         .unwrap();
 
         let mut epic = Unit::new("1", "Epic parent");
-        epic.kind = UnitKind::Epic;
+        epic.kind = UnitType::Epic;
         epic.verify = Some("cargo test should_not_dispatch_epic".to_string());
         epic.to_file(mana_dir.join("1-epic-parent.md")).unwrap();
 
-        let mut job = Unit::new("2", "Dispatchable job");
-        job.kind = UnitKind::Job;
-        job.verify = Some("cargo test dispatchable_job".to_string());
-        job.to_file(mana_dir.join("2-dispatchable-job.md")).unwrap();
+        let mut task = Unit::new("2", "Dispatchable task");
+        task.kind = UnitType::Task;
+        task.verify = Some("cargo test dispatchable_task".to_string());
+        task.to_file(mana_dir.join("2-dispatchable-task.md"))
+            .unwrap();
 
         let queue = compute_ready_queue(&mana_dir, None, false).unwrap();
         assert_eq!(queue.units.len(), 1);

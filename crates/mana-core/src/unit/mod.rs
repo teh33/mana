@@ -68,16 +68,34 @@ pub fn validate_priority(priority: u8) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Unit Kind
+// Unit Type
 // ---------------------------------------------------------------------------
 
-/// Explicit schema kind for a unit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Explicit type for a unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum UnitKind {
+pub enum UnitType {
     Epic,
-    Job,
+    Task,
     Fact,
+}
+
+impl<'de> Deserialize<'de> for UnitType {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        match value.as_str() {
+            "epic" => Ok(UnitType::Epic),
+            "task" | "job" => Ok(UnitType::Task),
+            "fact" => Ok(UnitType::Fact),
+            other => Err(serde::de::Error::unknown_variant(
+                other,
+                &["epic", "task", "job", "fact"],
+            )),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -206,8 +224,8 @@ pub struct Unit {
     pub verify_timeout: Option<u64>,
 
     // -- Memory system fields --
-    /// Explicit schema kind for public mana vocabulary.
-    pub kind: UnitKind,
+    /// Explicit type for public mana vocabulary. Serialized as `kind` for compatibility.
+    pub kind: UnitType,
 
     /// Unit type: 'task' (default) or 'fact' (verified knowledge).
     #[serde(
@@ -285,39 +303,39 @@ fn is_default_unit_type(v: &str) -> bool {
     v == "task"
 }
 
-fn default_unit_kind() -> UnitKind {
-    UnitKind::Epic
+fn default_unit_type_kind() -> UnitType {
+    UnitType::Epic
 }
 
-fn infer_unit_kind(kind: Option<UnitKind>, unit_type: &str, verify: Option<&str>) -> UnitKind {
+fn infer_unit_type(kind: Option<UnitType>, unit_type: &str, verify: Option<&str>) -> UnitType {
     kind.unwrap_or_else(|| {
         if unit_type == "fact" {
-            UnitKind::Fact
+            UnitType::Fact
         } else if verify.is_some_and(|command| !command.trim().is_empty()) {
-            UnitKind::Job
+            UnitType::Task
         } else {
-            UnitKind::Epic
+            UnitType::Epic
         }
     })
 }
 
-impl UnitKind {
-    pub fn is_dispatchable_job(self) -> bool {
-        matches!(self, UnitKind::Job)
+impl UnitType {
+    pub fn is_dispatchable_task(self) -> bool {
+        matches!(self, UnitType::Task)
     }
 
     pub fn is_claimable(self) -> bool {
-        !matches!(self, UnitKind::Fact)
+        !matches!(self, UnitType::Fact)
     }
 
     pub fn is_epic_like(self, feature: bool) -> bool {
-        feature || matches!(self, UnitKind::Epic)
+        feature || matches!(self, UnitType::Epic)
     }
 }
 
 impl Unit {
-    pub fn is_dispatchable_job(&self) -> bool {
-        self.kind.is_dispatchable_job()
+    pub fn is_dispatchable_task(&self) -> bool {
+        self.kind.is_dispatchable_task()
             && self.verify.as_ref().is_some_and(|v| !v.trim().is_empty())
     }
 
@@ -417,7 +435,7 @@ struct UnitWire {
     verify_timeout: Option<u64>,
 
     #[serde(default)]
-    kind: Option<UnitKind>,
+    kind: Option<UnitType>,
 
     #[serde(default = "default_unit_type")]
     unit_type: String,
@@ -450,7 +468,7 @@ struct UnitWire {
 
 impl From<UnitWire> for Unit {
     fn from(raw: UnitWire) -> Self {
-        let kind = infer_unit_kind(raw.kind, &raw.unit_type, raw.verify.as_deref());
+        let kind = infer_unit_type(raw.kind, &raw.unit_type, raw.verify.as_deref());
 
         Self {
             id: raw.id,
@@ -563,7 +581,7 @@ impl Unit {
             outputs: None,
             max_loops: None,
             verify_timeout: None,
-            kind: default_unit_kind(),
+            kind: default_unit_type_kind(),
             unit_type: "task".to_string(),
             last_verified: None,
             stale_after: None,
@@ -1045,43 +1063,43 @@ mod tests {
     #[test]
     fn epic_is_not_dispatchable() {
         let mut unit = Unit::new("1", "Epic");
-        unit.kind = UnitKind::Epic;
+        unit.kind = UnitType::Epic;
         unit.verify = Some("cargo test something".to_string());
 
-        assert!(!unit.is_dispatchable_job());
+        assert!(!unit.is_dispatchable_task());
         assert!(unit.is_claimable());
         assert!(unit.is_epic_like());
     }
 
     #[test]
-    fn job_dispatchability_is_explicit() {
-        let mut unit = Unit::new("2", "Job");
-        unit.kind = UnitKind::Job;
-        unit.verify = Some("cargo test job_dispatchability_is_explicit".to_string());
+    fn task_dispatchability_is_explicit() {
+        let mut unit = Unit::new("2", "Task");
+        unit.kind = UnitType::Task;
+        unit.verify = Some("cargo test task_dispatchability_is_explicit".to_string());
 
-        assert!(unit.is_dispatchable_job());
+        assert!(unit.is_dispatchable_task());
         assert!(unit.is_claimable());
         assert!(!unit.is_epic_like());
 
         unit.verify = Some("   ".to_string());
-        assert!(!unit.is_dispatchable_job());
+        assert!(!unit.is_dispatchable_task());
     }
 
     #[test]
     fn feature_semantics_preserve_human_review() {
         let mut unit = Unit::new("3", "Feature epic");
-        unit.kind = UnitKind::Epic;
+        unit.kind = UnitType::Epic;
         unit.feature = true;
 
         assert!(unit.is_epic_like());
         assert!(unit.requires_human_close());
-        assert!(!unit.is_dispatchable_job());
+        assert!(!unit.is_dispatchable_task());
     }
 
     #[test]
-    fn kind_round_trip_yaml() {
-        let mut unit = Unit::new("1", "Explicit kind");
-        unit.kind = UnitKind::Epic;
+    fn type_round_trip_yaml() {
+        let mut unit = Unit::new("1", "Explicit type");
+        unit.kind = UnitType::Epic;
         unit.verify = Some("cargo test unit::check".to_string());
 
         let yaml = serde_yml::to_string(&unit).unwrap();
@@ -1089,7 +1107,7 @@ mod tests {
 
         let restored: Unit = serde_yml::from_str(&yaml).unwrap();
 
-        assert_eq!(restored.kind, UnitKind::Epic);
+        assert_eq!(restored.kind, UnitType::Epic);
         assert_eq!(restored.verify, unit.verify);
     }
 
@@ -1105,7 +1123,7 @@ updated_at: "2025-01-01T00:00:00Z"
 unit_type: fact
 "#;
         let fact: Unit = serde_yml::from_str(fact_yaml).unwrap();
-        assert_eq!(fact.kind, UnitKind::Fact);
+        assert_eq!(fact.kind, UnitType::Fact);
 
         let epic_yaml = r#"
 id: "2"
@@ -1116,7 +1134,7 @@ created_at: "2025-01-01T00:00:00Z"
 updated_at: "2025-01-01T00:00:00Z"
 "#;
         let epic: Unit = serde_yml::from_str(epic_yaml).unwrap();
-        assert_eq!(epic.kind, UnitKind::Epic);
+        assert_eq!(epic.kind, UnitType::Epic);
 
         let job_yaml = r#"
 id: "3"
@@ -1127,8 +1145,8 @@ created_at: "2025-01-01T00:00:00Z"
 updated_at: "2025-01-01T00:00:00Z"
 verify: cargo test
 "#;
-        let job: Unit = serde_yml::from_str(job_yaml).unwrap();
-        assert_eq!(job.kind, UnitKind::Job);
+        let task: Unit = serde_yml::from_str(job_yaml).unwrap();
+        assert_eq!(task.kind, UnitType::Task);
     }
 
     #[test]
@@ -1181,7 +1199,7 @@ verify: cargo test
             history: Vec::new(),
             outputs: Some(serde_json::json!({"key": "value"})),
             max_loops: None,
-            kind: UnitKind::Job,
+            kind: UnitType::Task,
             unit_type: "task".to_string(),
             last_verified: None,
             stale_after: None,
@@ -1283,7 +1301,7 @@ verify: cargo test
         let unit = Unit::new("1", "Defaults");
         assert_eq!(unit.status, Status::Open);
         assert_eq!(unit.priority, 2);
-        assert_eq!(unit.kind, UnitKind::Epic);
+        assert_eq!(unit.kind, UnitType::Epic);
         assert!(unit.labels.is_empty());
         assert!(unit.dependencies.is_empty());
         assert!(unit.description.is_none());
@@ -1302,7 +1320,7 @@ updated_at: "2025-01-01T00:00:00Z"
         let unit: Unit = serde_yml::from_str(yaml).unwrap();
         assert_eq!(unit.id, "5");
         assert_eq!(unit.priority, 3);
-        assert_eq!(unit.kind, UnitKind::Epic);
+        assert_eq!(unit.kind, UnitType::Epic);
         assert!(unit.description.is_none());
         assert!(unit.labels.is_empty());
         assert!(unit.autonomy_disposition.is_none());

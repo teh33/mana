@@ -14,7 +14,7 @@ use crate::config::Config;
 use crate::discovery::find_unit_file;
 use crate::index::{Index, IndexEntry};
 use crate::mcp::protocol::ToolDefinition;
-use crate::unit::{Status, Unit, UnitKind};
+use crate::unit::{Status, Unit, UnitType};
 use crate::util::{natural_cmp, title_to_slug};
 
 /// Return all MCP tool definitions.
@@ -60,7 +60,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "ready_units".to_string(),
-            description: "Get units ready to work on (open dispatchable jobs with all dependencies resolved)".to_string(),
+            description: "Get units ready to work on (open dispatchable tasks with all dependencies resolved)".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {}
@@ -177,7 +177,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "status".to_string(),
-            description: "Project status overview: claimed, ready jobs, epics, and blocked units".to_string(),
+            description: "Project status overview: claimed, ready tasks, epics, and blocked units".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {}
@@ -314,7 +314,7 @@ fn handle_ready_units(mana_dir: &Path) -> Result<String> {
         .units
         .iter()
         .filter(|entry| {
-            entry.kind == UnitKind::Job
+            entry.kind == UnitType::Task
                 && entry.has_verify
                 && entry.status == Status::Open
                 && check_blocked(entry, &index).is_none()
@@ -459,20 +459,29 @@ fn handle_close_unit(args: &Value, mana_dir: &Path) -> Result<String> {
     // Run verify if configured and not forced
     if let Some(ref verify_cmd) = unit.verify {
         if !force {
+            let config = Config::load_with_extends(mana_dir).ok();
+            let timeout_secs =
+                unit.effective_verify_timeout(config.as_ref().and_then(|c| c.verify_timeout));
             let project_root = mana_dir
                 .parent()
                 .ok_or_else(|| anyhow::anyhow!("Cannot determine project root"))?;
 
-            let output = std::process::Command::new("sh")
-                .args(["-c", verify_cmd])
-                .current_dir(project_root)
-                .output()
-                .with_context(|| format!("Failed to execute verify: {}", verify_cmd))?;
+            let verify_result = mana_core::ops::verify::run_verify_command(
+                verify_cmd,
+                project_root,
+                timeout_secs,
+            )
+            .with_context(|| format!("Failed to execute verify: {}", verify_cmd))?;
 
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let combined = format!("{}{}", stdout, stderr);
+            if !verify_result.passed {
+                let combined = if verify_result.timed_out {
+                    match verify_result.timeout_secs {
+                        Some(secs) => format!("Verify timed out after {secs}s"),
+                        None => "Verify timed out".to_string(),
+                    }
+                } else {
+                    format!("{}{}{}", verify_result.stdout, if !verify_result.stdout.is_empty() && !verify_result.stderr.is_empty() { "\n" } else { "" }, verify_result.stderr)
+                };
                 let snippet = if combined.len() > 2000 {
                     format!("...{}", &combined[combined.len() - 2000..])
                 } else {
@@ -629,7 +638,7 @@ fn handle_status(mana_dir: &Path) -> Result<String> {
                     blocked.push((entry, reason.to_string()));
                 } else if entry.feature {
                     goals.push(entry);
-                } else if entry.kind == UnitKind::Epic {
+                } else if entry.kind == UnitType::Epic {
                     epics.push(entry);
                 } else if entry.has_verify {
                     ready.push(entry);

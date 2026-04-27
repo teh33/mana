@@ -12,7 +12,7 @@ use mana::index::Index;
 use mana::mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
 use mana::mcp::resources;
 use mana::mcp::tools;
-use mana::unit::{Unit, UnitKind};
+use mana::unit::{Unit, UnitType};
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -33,7 +33,7 @@ fn setup_mcp_env() -> (TempDir, std::path::PathBuf) {
 
     // Unit 1: open with verify (scoped with produces/paths)
     let mut unit1 = Unit::new("1", "Fix login bug");
-    unit1.kind = UnitKind::Job;
+    unit1.kind = UnitType::Task;
     unit1.slug = Some("fix-login-bug".to_string());
     unit1.verify = Some("echo pass".to_string());
     unit1.description = Some("Fix the login authentication flow".to_string());
@@ -43,7 +43,7 @@ fn setup_mcp_env() -> (TempDir, std::path::PathBuf) {
 
     // Unit 2: open, depends on 1 (scoped with produces/paths)
     let mut unit2 = Unit::new("2", "Add tests for login");
-    unit2.kind = UnitKind::Job;
+    unit2.kind = UnitType::Task;
     unit2.slug = Some("add-tests-for-login".to_string());
     unit2.verify = Some("echo pass".to_string());
     unit2.dependencies = vec!["1".to_string()];
@@ -57,7 +57,7 @@ fn setup_mcp_env() -> (TempDir, std::path::PathBuf) {
     let mut unit3 = Unit::new("3", "Refactor auth module");
     unit3.slug = Some("refactor-auth-module".to_string());
     unit3.priority = 1;
-    unit3.kind = UnitKind::Epic;
+    unit3.kind = UnitType::Epic;
     unit3.produces = vec!["AuthRefactor".to_string()];
     unit3.paths = vec!["src/auth.rs".to_string()];
     unit3
@@ -422,6 +422,26 @@ fn mcp_close_unit_with_failing_verify_returns_error() {
     assert_eq!(result["isError"], true);
     let text = result["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("Verify failed"));
+}
+
+#[test]
+fn mcp_close_unit_verify_timeout_returns_error() {
+    let (_dir, mana_dir) = setup_mcp_env();
+
+    let mut unit = Unit::new("11", "Slow unit");
+    unit.slug = Some("slow-unit".to_string());
+    unit.verify = Some("python3 -c 'import time; time.sleep(2)'".to_string());
+    unit.verify_timeout = Some(1);
+    unit.to_file(mana_dir.join("11-slow-unit.md")).unwrap();
+    let index = Index::build(&mana_dir).unwrap();
+    index.save(&mana_dir).unwrap();
+
+    let result = tools::handle_tool_call("close_unit", &json!({"id": "11"}), &mana_dir);
+
+    assert_eq!(result["isError"], true);
+    let text = result["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("Verify failed"));
+    assert!(text.contains("Verify timed out after 1s"));
 }
 
 #[test]

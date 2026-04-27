@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::discovery::find_unit_file;
 use crate::index::Index;
 use crate::mcp::protocol::{ResourceContent, ResourceDefinition};
-use crate::unit::{Unit, UnitKind};
+use crate::unit::{Unit, UnitType};
 
 /// Return static resource definitions.
 pub fn resource_definitions() -> Vec<ResourceDefinition> {
@@ -17,7 +17,8 @@ pub fn resource_definitions() -> Vec<ResourceDefinition> {
             uri: "units://status".to_string(),
             name: "Project Status".to_string(),
             description: Some(
-                "Current project status: claimed, ready jobs, epics, and blocked units".to_string(),
+                "Current project status: claimed, ready tasks, epics, and blocked units"
+                    .to_string(),
             ),
             mime_type: Some("application/json".to_string()),
         },
@@ -66,7 +67,7 @@ fn read_status_resource(mana_dir: &Path) -> Result<Vec<ResourceContent>> {
             crate::unit::Status::Open => {
                 if entry.feature {
                     features += 1;
-                } else if entry.kind == UnitKind::Epic {
+                } else if entry.kind == UnitType::Epic {
                     epics += 1;
                 } else if entry.has_verify {
                     let is_blocked = entry.dependencies.iter().any(|dep_id| {

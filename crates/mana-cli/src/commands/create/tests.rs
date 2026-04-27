@@ -3,7 +3,7 @@ use std::fs;
 
 use crate::config::Config;
 use crate::index::Index;
-use crate::unit::{OnFailAction, Status, Unit, UnitKind};
+use crate::unit::{OnFailAction, Status, Unit, UnitType};
 use tempfile::TempDir;
 
 fn setup_mana_dir_with_config() -> (TempDir, std::path::PathBuf) {
@@ -425,7 +425,7 @@ fn create_epic_sets_kind_epic() {
 
     let id = cmd_create(&mana_dir, args).unwrap();
     let unit = Unit::from_file(mana_dir.join(format!("{}-epic-parent.md", id))).unwrap();
-    assert_eq!(unit.kind, UnitKind::Epic);
+    assert_eq!(unit.kind, UnitType::Epic);
     assert!(unit.verify.is_none());
 }
 
@@ -467,7 +467,7 @@ fn create_updates_index() {
     assert_eq!(index.units.len(), 1);
     assert_eq!(index.units[0].id, "1");
     assert_eq!(index.units[0].title, "Indexed unit");
-    assert_eq!(index.units[0].kind, UnitKind::Epic);
+    assert_eq!(index.units[0].kind, UnitType::Epic);
 }
 
 #[test]

@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::blocking::check_blocked_with_archive;
 use crate::index::{ArchiveIndex, Index, IndexEntry};
-use crate::unit::{Status, UnitKind};
+use crate::unit::{Status, UnitType};
 use crate::util::natural_cmp;
 
 /// Categorized view of project status.
@@ -46,7 +46,7 @@ pub fn status(mana_dir: &Path) -> Result<StatusSummary> {
             features.push(entry.clone());
             continue;
         }
-        if entry.kind == UnitKind::Epic {
+        if entry.kind == UnitType::Epic {
             epics.push(entry.clone());
             continue;
         }
@@ -60,7 +60,7 @@ pub fn status(mana_dir: &Path) -> Result<StatusSummary> {
                         entry: entry.clone(),
                         block_reason: reason.to_string(),
                     });
-                } else if entry.kind == UnitKind::Job && entry.has_verify {
+                } else if entry.kind == UnitType::Task && entry.has_verify {
                     ready.push(entry.clone());
                 } else {
                     goals.push(entry.clone());
@@ -123,16 +123,16 @@ mod tests {
         let (_dir, mana_dir) = setup();
 
         let mut epic = Unit::new("1", "Epic");
-        epic.kind = UnitKind::Epic;
+        epic.kind = UnitType::Epic;
         write_unit(&mana_dir, &epic);
 
-        let mut job = Unit::new("2", "Job");
-        job.kind = UnitKind::Job;
-        job.verify = Some("cargo test job".to_string());
-        write_unit(&mana_dir, &job);
+        let mut task = Unit::new("2", "Task");
+        task.kind = UnitType::Task;
+        task.verify = Some("cargo test task".to_string());
+        write_unit(&mana_dir, &task);
 
         let mut feature = Unit::new("3", "Feature");
-        feature.kind = UnitKind::Epic;
+        feature.kind = UnitType::Epic;
         feature.feature = true;
         write_unit(&mana_dir, &feature);
 

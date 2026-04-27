@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use crate::config::Config;
 use crate::hooks::{execute_hook, HookEvent};
 use crate::index::{Index, LockedIndex};
-use crate::unit::{validate_priority, OnFailAction, Unit, UnitKind};
+use crate::unit::{validate_priority, OnFailAction, Unit, UnitType};
 use crate::util::title_to_slug;
 use crate::verify_lint::{lint_verify, VerifyLintLevel};
 
@@ -67,7 +67,7 @@ pub struct CreateParams {
     pub on_fail: Option<OnFailAction>,
     pub fail_first: bool,
     pub feature: bool,
-    pub kind: Option<UnitKind>,
+    pub kind: Option<UnitType>,
     pub verify_timeout: Option<u64>,
     pub decisions: Vec<String>,
     /// Skip verify lint errors (allow anti-pattern verify commands)

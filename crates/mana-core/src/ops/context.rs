@@ -241,7 +241,7 @@ pub fn resolve_dependency_context(mana_dir: &Path, unit: &Unit) -> Vec<DepProvid
     providers
 }
 
-/// Summarize direct child jobs for parent-oriented views.
+/// Summarize direct child tasks for parent-oriented views.
 pub fn summarize_child_units(mana_dir: &Path, parent_id: &str) -> Vec<ChildSummary> {
     let index = match Index::load_or_rebuild(mana_dir) {
         Ok(idx) => idx,
@@ -666,7 +666,7 @@ mod tests {
             .to_file(mana_dir.join(format!("1-{}.md", parent_slug)))
             .unwrap();
 
-        let mut child = Unit::new("1.1", "Child job");
+        let mut child = Unit::new("1.1", "Child task");
         child.parent = Some("1".to_string());
         child.status = Status::Open;
         child.verify = Some("cargo test child".to_string());

@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::blocking::check_blocked;
 use crate::index::{Index, IndexEntry};
-use crate::unit::{Status, UnitKind};
+use crate::unit::{Status, UnitType};
 
 /// A scored unit with metadata for display.
 #[derive(Debug, Serialize)]
@@ -89,7 +89,7 @@ pub fn cmd_next(n: usize, json: bool, mana_dir: &Path) -> Result<()> {
         .iter()
         .filter(|e| {
             e.status == Status::Open
-                && e.kind == UnitKind::Job
+                && e.kind == UnitType::Task
                 && e.has_verify
                 && !e.feature
                 && check_blocked(e, &index).is_none()
@@ -203,7 +203,7 @@ mod tests {
             claimed_by: None,
             attempts: 0,
             paths: vec![],
-            kind: crate::unit::UnitKind::Job,
+            kind: crate::unit::UnitType::Task,
             feature: false,
             has_decisions: false,
         }
@@ -231,7 +231,7 @@ mod tests {
                     claimed_by: None,
                     attempts: 0,
                     paths: vec![],
-                    kind: UnitKind::Epic,
+                    kind: UnitType::Epic,
                     feature: false,
                     has_decisions: false,
                 },
@@ -244,7 +244,7 @@ mod tests {
             .iter()
             .filter(|e| {
                 e.status == Status::Open
-                    && e.kind == UnitKind::Job
+                    && e.kind == UnitType::Task
                     && e.has_verify
                     && !e.feature
                     && check_blocked(e, &index).is_none()

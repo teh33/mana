@@ -2,13 +2,13 @@
 name: mana
 description: >
   Coordination substrate for AI coding agents. Verified gates, dependency scheduling, multi-agent
-  dispatch. Create jobs to delegate work — `mana run` dispatches ready jobs automatically.
+  dispatch. Create jobs to delegate work — `mana run` dispatches ready tasks automatically.
   Default action: `mana create "task" --verify "cmd"` (don't claim — let orchestration handle it).
 ---
 
 # Mana — Quick Reference
 
-Mana is a task tracker for AI agents where jobs, epics, and facts share the same durable substrate. Jobs have a **verify gate** — a shell command that must exit 0 to close. `mana run` dispatches ready jobs to agents, while epics organize larger efforts and facts capture verified project knowledge.
+Mana is a task tracker for AI agents where jobs, epics, and facts share the same durable substrate. Jobs have a **verify gate** — a shell command that must exit 0 to close. `mana run` dispatches ready tasks to agents, while epics organize larger efforts and facts capture verified project knowledge.
 
 Mana speaks publicly in terms of epics, jobs, and facts.
 
@@ -17,10 +17,10 @@ Mana speaks publicly in terms of epics, jobs, and facts.
 ## When to Create
 
 - Bug found while working → `mana create "bug: ..." --verify "test"`
-- Multi-step feature job → `mana create "feat: ..." --verify "test"`
+- Multi-step feature task → `mana create "feat: ..." --verify "test"`
 - Tests needed → `mana create "test: ..." --verify "test"`
-- Refactor/docs/chore job → `mana create "refactor: ..." --verify "cmd" -p`
-- Bigger parent effort → create an **epic** to decompose into child jobs
+- Refactor/docs/chore task → `mana create "refactor: ..." --verify "cmd" -p`
+- Bigger parent effort → create an **epic** to decompose into child tasks
 - Durable knowledge → create a **fact** with `mana fact`
 
 Use `--paths` to specify which files a unit touches (used by `mana context`):

@@ -67,7 +67,7 @@ Actual:
 ## 4) Parent features surfaced as ready alongside leaf work
 
 Observed in `mana status` / `mana next`:
-- parent feature units like `2.1`, `2.2`, `2.3` showed up as ready together with concrete child jobs
+- parent feature units like `2.1`, `2.2`, `2.3` showed up as ready together with concrete child tasks
 - this made generic `mana run` less useful, because the truly actionable units were leaf tasks with verify gates
 
 Expected:

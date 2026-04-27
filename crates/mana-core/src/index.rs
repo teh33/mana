@@ -34,7 +34,7 @@ use chrono::{DateTime, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 
-use crate::unit::{Status, Unit, UnitKind};
+use crate::unit::{Status, Unit, UnitType};
 use crate::util::{atomic_write, natural_cmp};
 use crate::yaml;
 
@@ -91,8 +91,8 @@ pub struct IndexEntry {
     /// File paths this unit touches (for scope-based blocking)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paths: Vec<String>,
-    /// Explicit schema kind.
-    pub kind: UnitKind,
+    /// Explicit unit type.
+    pub kind: UnitType,
     /// Whether this unit is a feature (product-level goal, human-only close)
     #[serde(default)]
     pub feature: bool,
@@ -689,10 +689,10 @@ mod tests {
     #[test]
     fn index_entry_preserves_kind() {
         let mut unit = Unit::new("1", "Epic unit");
-        unit.kind = crate::unit::UnitKind::Epic;
+        unit.kind = crate::unit::UnitType::Epic;
 
         let entry = IndexEntry::from(&unit);
-        assert_eq!(entry.kind, crate::unit::UnitKind::Epic);
+        assert_eq!(entry.kind, crate::unit::UnitType::Epic);
     }
 
     #[test]
