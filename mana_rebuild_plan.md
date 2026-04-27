@@ -2,7 +2,7 @@
 
 Status: active planning draft
 Audience: `mana` maintainers
-Scope: `~/tower/mana`
+Scope: `~/mana`
 
 This file converts `mana_rebuild_strategy.md` into an execution plan with a strict order of operations.
 

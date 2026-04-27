@@ -2,7 +2,7 @@
 
 Date: 2026-04-20
 Observed by: imp while orchestrating `mailfor`
-Repo: `~/tower/mana`
+Repo: `~/mana`
 
 ## Summary
 
