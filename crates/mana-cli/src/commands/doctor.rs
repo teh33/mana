@@ -8,6 +8,7 @@ use crate::commands::config_cmd::collect_doctor_findings;
 use crate::graph;
 use crate::index::{count_unit_formats, Index};
 use crate::unit::Unit;
+use mana_core::sqlite;
 
 /// Issue types that doctor can detect and potentially fix
 #[derive(Debug)]
@@ -45,6 +46,22 @@ enum Issue {
     ConfigFinding {
         summary: String,
         details: String,
+    },
+    SqliteIndexStale,
+    SqliteSchemaUnsupported {
+        version: String,
+    },
+    SqliteDiagnostic {
+        severity: String,
+        kind: String,
+        path: Option<String>,
+        unit_id: Option<String>,
+        field: Option<String>,
+        message: String,
+    },
+    UnitParseError {
+        file: String,
+        message: String,
     },
 }
 
@@ -104,13 +121,45 @@ impl Issue {
             Issue::ConfigFinding { summary, details } => {
                 format!("[!] Config: {}\n    {}", summary, details)
             }
+            Issue::SqliteIndexStale => {
+                "[!] SQLite index stale - run 'mana doctor fix' to rebuild".to_string()
+            }
+            Issue::SqliteSchemaUnsupported { version } => format!(
+                "[!] SQLite index schema {} is unsupported; expected {}",
+                version,
+                sqlite::SCHEMA_VERSION
+            ),
+            Issue::SqliteDiagnostic {
+                severity,
+                kind,
+                path,
+                unit_id,
+                field,
+                message,
+            } => {
+                let mut target = path.clone().or_else(|| unit_id.clone()).unwrap_or_default();
+                if let Some(field) = field {
+                    if !field.is_empty() {
+                        target.push_str(&format!(" field={field}"));
+                    }
+                }
+                format!("[!] SQLite {severity} {kind}: {target}\n    {message}")
+            }
+            Issue::UnitParseError { file, message } => {
+                format!("[!] Unit parse error in {file}\n    {message}")
+            }
         }
     }
 
     fn is_fixable(&self) -> bool {
         matches!(
             self,
-            Issue::StaleIndex | Issue::StaleIndexEntry { .. } | Issue::MissingIndexEntry { .. }
+            Issue::StaleIndex
+                | Issue::StaleIndexEntry { .. }
+                | Issue::MissingIndexEntry { .. }
+                | Issue::SqliteIndexStale
+                | Issue::SqliteSchemaUnsupported { .. }
+                | Issue::SqliteDiagnostic { .. }
         )
     }
 }
@@ -135,52 +184,59 @@ fn is_unit_filename(filename: &str) -> bool {
 fn scan_unit_files(mana_dir: &Path) -> Result<HashMap<String, Vec<String>>> {
     let mut id_to_files: HashMap<String, Vec<String>> = HashMap::new();
 
-    let dir_entries = fs::read_dir(mana_dir)?;
-
-    for entry in dir_entries {
-        let entry = entry?;
-        let path = entry.path();
-
-        let filename = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default();
-
-        if !is_unit_filename(filename) {
-            continue;
-        }
-
-        // Try to parse the unit to get its ID
+    for (path, filename) in iter_unit_files(mana_dir)? {
         if let Ok(unit) = Unit::from_file(&path) {
             id_to_files
                 .entry(unit.id.clone())
                 .or_default()
-                .push(filename.to_string());
+                .push(filename);
         }
     }
 
     Ok(id_to_files)
 }
 
-/// Get all unit source files that exist
-fn get_existing_unit_files(mana_dir: &Path) -> Result<Vec<String>> {
-    let mut existing = Vec::new();
+fn collect_unit_parse_errors(mana_dir: &Path) -> Result<Vec<Issue>> {
+    let mut issues = Vec::new();
+    for (path, filename) in iter_unit_files(mana_dir)? {
+        if let Err(error) = Unit::from_file(&path) {
+            issues.push(Issue::UnitParseError {
+                file: filename,
+                message: error.to_string(),
+            });
+        }
+    }
+    Ok(issues)
+}
 
+fn iter_unit_files(mana_dir: &Path) -> Result<Vec<(std::path::PathBuf, String)>> {
+    let mut files = Vec::new();
     let dir_entries = fs::read_dir(mana_dir)?;
 
     for entry in dir_entries {
         let entry = entry?;
         let path = entry.path();
-
         let filename = path
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .to_string();
 
-        if is_unit_filename(filename) {
-            if let Ok(unit) = Unit::from_file(&path) {
-                existing.push(unit.id);
-            }
+        if is_unit_filename(&filename) {
+            files.push((path, filename));
+        }
+    }
+
+    Ok(files)
+}
+
+/// Get all unit source files that exist
+fn get_existing_unit_files(mana_dir: &Path) -> Result<Vec<String>> {
+    let mut existing = Vec::new();
+
+    for (path, _) in iter_unit_files(mana_dir)? {
+        if let Ok(unit) = Unit::from_file(&path) {
+            existing.push(unit.id);
         }
     }
 
@@ -211,8 +267,9 @@ fn collect_issues(mana_dir: &Path, fix: bool) -> Result<Vec<Issue>> {
         });
     }
 
-    // Check 3: Duplicate IDs
+    // Check 3: Duplicate IDs and parse errors
     let id_to_files = scan_unit_files(mana_dir)?;
+    issues.extend(collect_unit_parse_errors(mana_dir)?);
     for (id, files) in &id_to_files {
         if files.len() > 1 {
             issues.push(Issue::DuplicateId {
@@ -312,6 +369,51 @@ fn collect_issues(mana_dir: &Path, fix: bool) -> Result<Vec<Issue>> {
         });
     }
 
+    // Check 10: SQLite derived index health and diagnostics
+    issues.extend(collect_sqlite_issues(mana_dir)?);
+
+    Ok(issues)
+}
+
+fn collect_sqlite_issues(mana_dir: &Path) -> Result<Vec<Issue>> {
+    let mut issues = Vec::new();
+    let sqlite_path = sqlite::Index::database_path(mana_dir);
+    if !sqlite_path.exists() {
+        return Ok(issues);
+    }
+
+    match sqlite::Index::open(mana_dir) {
+        Ok(index) => {
+            match index.schema_version() {
+                Ok(version) if version == sqlite::SCHEMA_VERSION => {}
+                Ok(version) => issues.push(Issue::SqliteSchemaUnsupported {
+                    version: version.to_string(),
+                }),
+                Err(error) => issues.push(Issue::SqliteSchemaUnsupported {
+                    version: error.to_string(),
+                }),
+            }
+
+            if index.is_stale()? {
+                issues.push(Issue::SqliteIndexStale);
+            }
+
+            for diagnostic in index.diagnostics()? {
+                issues.push(Issue::SqliteDiagnostic {
+                    severity: diagnostic.severity,
+                    kind: diagnostic.kind,
+                    path: diagnostic.source_path,
+                    unit_id: diagnostic.unit_id,
+                    field: diagnostic.field,
+                    message: diagnostic.message,
+                });
+            }
+        }
+        Err(error) => issues.push(Issue::SqliteSchemaUnsupported {
+            version: error.to_string(),
+        }),
+    }
+
     Ok(issues)
 }
 
@@ -355,13 +457,22 @@ pub fn cmd_doctor(mana_dir: &Path, fix: bool) -> Result<()> {
         let has_missing_index_entries = issues
             .iter()
             .any(|i| matches!(i, Issue::MissingIndexEntry { .. }));
-
-        if issues.iter().any(|i| {
+        let has_file_index_issues = issues.iter().any(|i| {
             matches!(
                 i,
                 Issue::StaleIndex | Issue::StaleIndexEntry { .. } | Issue::MissingIndexEntry { .. }
             )
-        }) {
+        });
+        let has_sqlite_fixable_issues = issues.iter().any(|i| {
+            matches!(
+                i,
+                Issue::SqliteIndexStale
+                    | Issue::SqliteSchemaUnsupported { .. }
+                    | Issue::SqliteDiagnostic { .. }
+            )
+        });
+
+        if has_file_index_issues {
             match Index::build(mana_dir) {
                 Ok(idx) => {
                     idx.save(mana_dir)?;
@@ -384,6 +495,31 @@ pub fn cmd_doctor(mana_dir: &Path, fix: bool) -> Result<()> {
                 }
                 Err(e) => {
                     println!("✗ Could not rebuild index: {}", e);
+                }
+            }
+        }
+
+        if has_sqlite_fixable_issues && !has_file_index_issues {
+            match sqlite::Index::rebuild(mana_dir) {
+                Ok(report) => {
+                    println!(
+                        "✓ Rebuilt SQLite index ({} valid unit(s), {} invalid file(s))",
+                        report.valid_units, report.invalid_files
+                    );
+                    fixed_count += issues
+                        .iter()
+                        .filter(|i| {
+                            matches!(
+                                i,
+                                Issue::SqliteIndexStale
+                                    | Issue::SqliteSchemaUnsupported { .. }
+                                    | Issue::SqliteDiagnostic { .. }
+                            )
+                        })
+                        .count();
+                }
+                Err(e) => {
+                    println!("✗ Could not rebuild SQLite index: {}", e);
                 }
             }
         }
@@ -662,6 +798,39 @@ mod tests {
 
         let rebuilt = Index::load(&mana_dir).unwrap();
         assert!(rebuilt.units.iter().any(|entry| entry.id == "1"));
+    }
+
+    #[test]
+    fn doctor_does_not_warn_for_missing_derived_sqlite() {
+        let (_dir, mana_dir) = setup_clean_project();
+        let sqlite_path = sqlite::Index::database_path(&mana_dir);
+        if sqlite_path.exists() {
+            fs::remove_file(sqlite_path).unwrap();
+        }
+
+        let issues = collect_issues(&mana_dir, false).unwrap();
+        assert!(!issues.iter().any(|issue| {
+            matches!(
+                issue,
+                Issue::SqliteIndexStale
+                    | Issue::SqliteSchemaUnsupported { .. }
+                    | Issue::SqliteDiagnostic { .. }
+            )
+        }));
+    }
+
+    #[test]
+    fn doctor_can_rebuild_sqlite_index_directly() {
+        let dir = TempDir::new().unwrap();
+        let mana_dir = dir.path().join(".mana");
+        fs::create_dir(&mana_dir).unwrap();
+
+        let unit = Unit::new("1", "Task one");
+        unit.to_file(mana_dir.join("1-task-one.md")).unwrap();
+        let report = sqlite::Index::rebuild(&mana_dir).unwrap();
+
+        assert_eq!(report.valid_units, 1);
+        assert!(sqlite::Index::database_path(&mana_dir).exists());
     }
 
     #[test]
