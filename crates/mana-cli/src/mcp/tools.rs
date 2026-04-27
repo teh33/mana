@@ -466,12 +466,9 @@ fn handle_close_unit(args: &Value, mana_dir: &Path) -> Result<String> {
                 .parent()
                 .ok_or_else(|| anyhow::anyhow!("Cannot determine project root"))?;
 
-            let verify_result = mana_core::ops::verify::run_verify_command(
-                verify_cmd,
-                project_root,
-                timeout_secs,
-            )
-            .with_context(|| format!("Failed to execute verify: {}", verify_cmd))?;
+            let verify_result =
+                mana_core::ops::verify::run_verify_command(verify_cmd, project_root, timeout_secs)
+                    .with_context(|| format!("Failed to execute verify: {}", verify_cmd))?;
 
             if !verify_result.passed {
                 let combined = if verify_result.timed_out {
@@ -480,7 +477,16 @@ fn handle_close_unit(args: &Value, mana_dir: &Path) -> Result<String> {
                         None => "Verify timed out".to_string(),
                     }
                 } else {
-                    format!("{}{}{}", verify_result.stdout, if !verify_result.stdout.is_empty() && !verify_result.stderr.is_empty() { "\n" } else { "" }, verify_result.stderr)
+                    format!(
+                        "{}{}{}",
+                        verify_result.stdout,
+                        if !verify_result.stdout.is_empty() && !verify_result.stderr.is_empty() {
+                            "\n"
+                        } else {
+                            ""
+                        },
+                        verify_result.stderr
+                    )
                 };
                 let snippet = if combined.len() > 2000 {
                     format!("...{}", &combined[combined.len() - 2000..])
