@@ -70,6 +70,7 @@ pub mod locks;
 pub mod ops;
 pub mod prompt;
 pub mod relevance;
+pub mod sqlite;
 pub mod unit;
 pub mod util;
 pub mod verify_lint;

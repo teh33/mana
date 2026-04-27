@@ -34,6 +34,7 @@ use chrono::{DateTime, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 
+use crate::sqlite;
 use crate::unit::{Status, Unit, UnitType};
 use crate::util::{atomic_write, natural_cmp};
 use crate::yaml;
@@ -328,6 +329,11 @@ impl Index {
         let yaml = serde_yml::to_string(self).with_context(|| "Failed to serialize index")?;
         atomic_write(&index_path, &yaml)
             .with_context(|| format!("Failed to write {}", index_path.display()))?;
+        if let Err(error) = sqlite::Index::rebuild(mana_dir) {
+            let _ = sqlite::Index::open(mana_dir).and_then(|index| {
+                index.mark_stale(&format!("index.yaml save hook failed: {error}"))
+            });
+        }
         Ok(())
     }
 
@@ -733,6 +739,19 @@ mod tests {
         assert!(err.contains("99"));
         assert!(err.contains("99-a.md"));
         assert!(err.contains("99-b.md"));
+    }
+
+    #[test]
+    fn save_rebuilds_sqlite_index() {
+        let (_dir, mana_dir) = setup_mana_dir();
+        let index = Index::build(&mana_dir).unwrap();
+
+        index.save(&mana_dir).unwrap();
+
+        let sqlite = sqlite::Index::open(&mana_dir).unwrap();
+        assert!(!sqlite.is_stale().unwrap());
+        assert!(sqlite.unit_exists("1").unwrap());
+        assert!(sqlite.unit_exists("3.1").unwrap());
     }
 
     #[test]
