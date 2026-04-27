@@ -1,5 +1,6 @@
 # Generated mana indexes and locks.
 index.yaml
+index.sqlite
 archive.yaml
 index.lock
 
