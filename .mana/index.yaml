@@ -6,7 +6,7 @@ units:
   parent: '27'
   updated_at: '2026-04-24T05:36:58.422857Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p mana-pool dedup_verify -- 2>&1 | grep 'test result' | grep -v '0 passed'
+  verify: cd /Users/asher/mana && cargo test -p mana-pool dedup_verify -- 2>&1 | grep 'test result' | grep -v '0 passed'
   created_at: '2026-03-24T01:58:06.472655Z'
   attempts: 1
   kind: task
@@ -19,7 +19,7 @@ units:
   parent: '27'
   updated_at: '2026-04-24T05:36:58.496795Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p mana-pool worktree -- 2>&1 | grep 'test result' | grep -v '0 passed'
+  verify: cd /Users/asher/mana && cargo test -p mana-pool worktree -- 2>&1 | grep 'test result' | grep -v '0 passed'
   created_at: '2026-03-24T02:00:32.215781Z'
   attempts: 1
   kind: task
@@ -32,7 +32,7 @@ units:
   parent: '27'
   updated_at: '2026-04-24T05:37:11.468704Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'verify_command' mana/crates/mana-cli/src/commands/run/ && rg -q 'VerifyGroupRun' mana/crates/mana-cli/src/commands/run/ mana/crates/mana-pool/src && cargo check -p mana-pool -p mana-cli
+  verify: cd /Users/asher/mana && rg -q 'verify_command' crates/mana-cli/src/commands/run/ && rg -q 'VerifyGroupRun' crates/mana-cli/src/commands/run/ crates/mana-pool/src && cargo check -p mana-pool -p mana-cli
   created_at: '2026-04-09T06:01:07.314113Z'
   attempts: 0
   kind: epic
@@ -51,7 +51,7 @@ units:
   - autonomy
   updated_at: '2026-04-24T05:37:11.364051Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'unresolved_decision|DecisionWarning|blocked' mana/crates/mana-core/src/ops/run.rs mana/crates/mana-cli/src/commands/run/mod.rs && cargo check -p mana-core -p mana-cli
+  verify: cd /Users/asher/mana && rg -q 'unresolved_decision|DecisionWarning|blocked' crates/mana-core/src/ops/run.rs crates/mana-cli/src/commands/run/mod.rs && cargo check -p mana-core -p mana-cli
   created_at: '2026-04-09T08:56:53.851629Z'
   attempts: 0
   kind: epic
@@ -70,7 +70,7 @@ units:
   - autonomy
   updated_at: '2026-04-24T05:37:11.380576Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'ReviewState|VerifyPosture|DeferredVerify|VerifyFrozenViolation' mana/crates/mana-core/src && cargo check -p mana-core
+  verify: cd /Users/asher/mana && rg -q 'ReviewState|VerifyPosture|DeferredVerify|VerifyFrozenViolation' crates/mana-core/src && cargo check -p mana-core
   created_at: '2026-04-09T08:57:24.679849Z'
   attempts: 0
   kind: epic
@@ -93,7 +93,7 @@ units:
   - autonomy
   updated_at: '2026-04-09T14:04:16.539137Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'autonomy|disposition|blocker' mana/crates/mana-pool/src/types.rs && cargo check -p mana-pool
+  verify: cd /Users/asher/mana && rg -q 'autonomy|disposition|blocker' crates/mana-pool/src/types.rs && cargo check -p mana-pool
   created_at: '2026-04-09T08:57:56.890786Z'
   attempts: 0
   kind: epic
@@ -117,7 +117,7 @@ units:
   - policy
   updated_at: '2026-04-09T14:55:45.726733Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'AutonomyDisposition' mana/crates/mana-core/src && rg -q 'fn .*autonomy.*disposition|compute_.*autonomy|derive_.*autonomy' mana/crates/mana-core/src/ops mana/crates/mana-core/src/unit && cargo check -p mana-core
+  verify: cd /Users/asher/mana && rg -q 'AutonomyDisposition' crates/mana-core/src && rg -q 'fn .*autonomy.*disposition|compute_.*autonomy|derive_.*autonomy' crates/mana-core/src/ops crates/mana-core/src/unit && cargo check -p mana-core
   created_at: '2026-04-09T08:59:08.814004Z'
   attempts: 0
   kind: epic
@@ -140,7 +140,7 @@ units:
   - pool
   updated_at: '2026-04-09T14:56:16.665982Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'AutonomyDisposition|autonomy' mana/crates/mana-core/src/ops/run.rs mana/crates/mana-pool/src/types.rs && cargo check -p mana-core -p mana-pool
+  verify: cd /Users/asher/mana && rg -q 'AutonomyDisposition|autonomy' crates/mana-core/src/ops/run.rs crates/mana-pool/src/types.rs && cargo check -p mana-core -p mana-pool
   created_at: '2026-04-09T08:59:41.100008Z'
   attempts: 0
   kind: epic
@@ -159,7 +159,7 @@ units:
   - follow-up
   updated_at: '2026-04-16T11:49:50.188574Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana show 27.13 >/dev/null && cargo test -p mana-core ops::show -- --nocapture && cargo test -p mana-cli show -- --nocapture
+  verify: cd /Users/asher/mana && mana show 27.13 >/dev/null && cargo test -p mana-core ops::show -- --nocapture && cargo test -p mana-cli show -- --nocapture
   created_at: '2026-04-09T13:50:42.534604Z'
   attempts: 0
   kind: task
@@ -183,7 +183,7 @@ units:
   - follow-up
   updated_at: '2026-04-09T14:56:08.874239Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'ApprovalState|ReviewState|refresh_autonomy_disposition' mana/crates/mana-core/src/unit && cargo check -p mana-core
+  verify: cd /Users/asher/mana && rg -q 'ApprovalState|ReviewState|refresh_autonomy_disposition' crates/mana-core/src/unit && cargo check -p mana-core
   created_at: '2026-04-09T14:56:08.874239Z'
   attempts: 0
   kind: task
@@ -221,7 +221,7 @@ units:
   - follow-up
   updated_at: '2026-04-16T11:49:49.997802Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana show 44.1.5.1 >/dev/null && ! mana list --all | rg -q '^44\.1\.2\.1\b'
+  verify: cd /Users/asher/mana && mana show 44.1.5.1 >/dev/null && ! mana list --all | rg -q '^44\.1\.2\.1\b'
   created_at: '2026-04-09T17:07:10.266318Z'
   attempts: 0
   kind: epic
@@ -318,7 +318,7 @@ units:
   - fact
   updated_at: '2026-04-09T15:12:00Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p mana-pool budget -- 2>&1 | grep 'test result' | grep -v '0 passed'
+  verify: cd /Users/asher/mana && cargo test -p mana-pool budget -- 2>&1 | grep 'test result' | grep -v '0 passed'
   created_at: '2026-04-09T15:10:00Z'
   attempts: 0
   paths:
@@ -359,7 +359,7 @@ units:
   - unblocker
   updated_at: '2026-04-24T05:37:29.482917Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo check -p mana-core && cargo check -p imp-cli
+  verify: cd /Users/asher/mana && cargo check -p mana-core && cargo check -p imp-cli
   created_at: '2026-04-09T07:52:24.291846Z'
   attempts: 0
   kind: epic
@@ -437,7 +437,7 @@ units:
   - easy-fix
   updated_at: '2026-04-24T05:37:45.162263Z'
   has_verify: true
-  verify: rg -n "No CI|tests only run locally|API layer is incomplete" mana/ARCHITECTURE.md README.md docs imp/README.md
+  verify: rg -n "No CI|tests only run locally|API layer is incomplete" ARCHITECTURE.md README.md docs
   created_at: '2026-04-09T06:25:19.870662Z'
   attempts: 1
   kind: epic
@@ -504,7 +504,7 @@ units:
   - fact
   updated_at: '2026-04-24T05:33:46.770414Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana list --all --parent 51 | rg -q '51\.3' && ! mana show 51.3 >/dev/null 2>&1
+  verify: cd /Users/asher/mana && mana list --all --parent 51 | rg -q '51\.3' && ! mana show 51.3 >/dev/null 2>&1
   created_at: '2026-04-09T12:06:03.352370Z'
   attempts: 0
   paths:
@@ -520,7 +520,7 @@ units:
   - fact
   updated_at: '2026-04-09T12:32:18.771941Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'check_circuit_breaker|CircuitBreakerResult' mana/crates/mana-core/src/ops/close.rs mana/crates/mana-cli/src/commands/close/failure.rs && ! rg -q 'check_circuit_breaker|CircuitBreakerResult' mana/crates/mana-pool/src/dispatch.rs
+  verify: cd /Users/asher/mana && rg -q 'check_circuit_breaker|CircuitBreakerResult' crates/mana-core/src/ops/close.rs crates/mana-cli/src/commands/close/failure.rs && ! rg -q 'check_circuit_breaker|CircuitBreakerResult' crates/mana-pool/src/dispatch.rs
   created_at: '2026-04-09T12:32:18.771941Z'
   attempts: 0
   paths:
@@ -538,7 +538,7 @@ units:
   - fact
   updated_at: '2026-04-09T13:22:11.836200Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana list --all --parent 50.10 | rg -q '50\.10\.3'
+  verify: cd /Users/asher/mana && mana list --all --parent 50.10 | rg -q '50\.10\.3'
   created_at: '2026-04-09T13:22:11.836200Z'
   attempts: 0
   paths:
@@ -554,7 +554,7 @@ units:
   - fact
   updated_at: '2026-04-09T13:26:27.753248Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q '^mana-core = \{ path = "\.\./mana-core"' mana/crates/mana-review/Cargo.toml && ! rg -q '^mana-review\s*=' mana/crates/mana-core/Cargo.toml
+  verify: cd /Users/asher/mana && rg -q '^mana-core = \{ path = "\.\./mana-core"' crates/mana-review/Cargo.toml && ! rg -q '^mana-review\s*=' crates/mana-core/Cargo.toml
   created_at: '2026-04-09T13:26:27.753248Z'
   attempts: 0
   paths:
@@ -571,7 +571,7 @@ units:
   - fact
   updated_at: '2026-04-09T13:26:51.160937Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'struct ApprovalRecord' mana/crates/mana-core/src && rg -q 'struct PromotionRecord' mana/crates/mana-core/src && rg -q 'enum ReviewGateOutcome' mana/crates/mana-core/src && rg -q 'fn validate\(&self\) -> Result<\(\), String>' mana/crates/mana-core/src/unit/types.rs && cargo test -p mana-core approval_record --lib && cargo test -p mana-core promotion_record --lib && cargo check -p mana-core
+  verify: cd /Users/asher/mana && rg -q 'struct ApprovalRecord' crates/mana-core/src && rg -q 'struct PromotionRecord' crates/mana-core/src && rg -q 'enum ReviewGateOutcome' crates/mana-core/src && rg -q 'fn validate\(&self\) -> Result<\(\), String>' crates/mana-core/src/unit/types.rs && cargo test -p mana-core approval_record --lib && cargo test -p mana-core promotion_record --lib && cargo check -p mana-core
   created_at: '2026-04-09T13:26:51.160937Z'
   attempts: 0
   paths:
@@ -632,7 +632,7 @@ units:
   - fact
   updated_at: '2026-04-09T18:07:35.312013Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p mana-review && cargo test -p mana-cli review
+  verify: cd /Users/asher/mana && cargo test -p mana-review && cargo test -p mana-cli review
   created_at: '2026-04-09T18:07:35.312013Z'
   attempts: 0
   paths:
@@ -906,7 +906,7 @@ units:
   - multi-user
   updated_at: '2026-04-27T19:13:28.317531Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana show 247.1 >/dev/null && test -n "mana-storage-backend-evolution-evaluated"
+  verify: cd /Users/asher/mana && mana show 247.1 >/dev/null && test -n "mana-storage-backend-evolution-evaluated"
   created_at: '2026-04-27T18:01:02.939249Z'
   attempts: 0
   kind: epic
@@ -926,7 +926,7 @@ units:
   - comparison
   updated_at: '2026-04-27T18:08:28.697877Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/architecture/mana-storage-backend-evolution.md && rg -q 'SQLite' docs/architecture/mana-storage-backend-evolution.md && rg -q 'JSONL' docs/architecture/mana-storage-backend-evolution.md && rg -q 'Markdown' docs/architecture/mana-storage-backend-evolution.md && rg -q 'object' docs/architecture/mana-storage-backend-evolution.md && rg -q 'multi-user|multi user|concurrency' docs/architecture/mana-storage-backend-evolution.md
+  verify: cd /Users/asher/mana && test -f docs/architecture/mana-storage-backend-evolution.md && rg -q 'SQLite' docs/architecture/mana-storage-backend-evolution.md && rg -q 'JSONL' docs/architecture/mana-storage-backend-evolution.md && rg -q 'Markdown' docs/architecture/mana-storage-backend-evolution.md && rg -q 'object' docs/architecture/mana-storage-backend-evolution.md && rg -q 'multi-user|multi user|concurrency' docs/architecture/mana-storage-backend-evolution.md
   created_at: '2026-04-27T18:01:24.670638Z'
   attempts: 0
   kind: epic
@@ -946,7 +946,7 @@ units:
   - conflicts
   updated_at: '2026-04-27T18:08:42.400812Z'
   has_verify: true
-  verify: cd /Users/asher/tower && (test -f docs/architecture/mana-storage-backend-evolution.md || test -f docs/architecture/mana-markdown-mirror-policy.md) && rg -q 'read-only|generated' docs/architecture && rg -q 'bidirectional|sync' docs/architecture && rg -q 'conflict|drift' docs/architecture && rg -q 'canonical' docs/architecture
+  verify: cd /Users/asher/mana && (test -f docs/architecture/mana-storage-backend-evolution.md || test -f docs/architecture/mana-markdown-mirror-policy.md) && rg -q 'read-only|generated' docs/architecture && rg -q 'bidirectional|sync' docs/architecture && rg -q 'conflict|drift' docs/architecture && rg -q 'canonical' docs/architecture
   created_at: '2026-04-27T18:01:35.476870Z'
   attempts: 0
   kind: epic
@@ -965,7 +965,7 @@ units:
   - storage
   updated_at: '2026-04-27T18:03:45.134748Z'
   has_verify: true
-  verify: cd /Users/asher/tower && (test -f docs/architecture/mana-storage-backend-evolution.md || test -f docs/architecture/mana-multi-user-storage-model.md) && rg -q 'multi-user|multi user|team' docs/architecture && rg -q 'concurrency|optimistic|lock|lease' docs/architecture && rg -q 'offline|local-first' docs/architecture && rg -q 'SQLite' docs/architecture
+  verify: cd /Users/asher/mana && (test -f docs/architecture/mana-storage-backend-evolution.md || test -f docs/architecture/mana-multi-user-storage-model.md) && rg -q 'multi-user|multi user|team' docs/architecture && rg -q 'concurrency|optimistic|lock|lease' docs/architecture && rg -q 'offline|local-first' docs/architecture && rg -q 'SQLite' docs/architecture
   created_at: '2026-04-27T18:01:44.532354Z'
   attempts: 0
   kind: epic
@@ -984,7 +984,7 @@ units:
   - storage
   updated_at: '2026-04-27T18:18:48.798994Z'
   has_verify: true
-  verify: cd /Users/asher/tower && test -f docs/architecture/mana-id-numbering-evolution.md && rg -q 'x\.y\.z|hierarchical' docs/architecture/mana-id-numbering-evolution.md && rg -q 'opaque|stable' docs/architecture/mana-id-numbering-evolution.md && rg -q 'display' docs/architecture/mana-id-numbering-evolution.md && rg -q 'compatib' docs/architecture/mana-id-numbering-evolution.md
+  verify: cd /Users/asher/mana && test -f docs/architecture/mana-id-numbering-evolution.md && rg -q 'x\.y\.z|hierarchical' docs/architecture/mana-id-numbering-evolution.md && rg -q 'opaque|stable' docs/architecture/mana-id-numbering-evolution.md && rg -q 'display' docs/architecture/mana-id-numbering-evolution.md && rg -q 'compatib' docs/architecture/mana-id-numbering-evolution.md
   created_at: '2026-04-27T18:01:53.249563Z'
   attempts: 0
   kind: epic
@@ -1006,7 +1006,7 @@ units:
   - context-assembly
   updated_at: '2026-04-27T19:35:26.431772Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana show 247.1.2.5 >/dev/null && mana show 247.1.2.6 >/dev/null
+  verify: cd /Users/asher/mana && mana show 247.1.2.5 >/dev/null && mana show 247.1.2.6 >/dev/null
   created_at: '2026-04-27T18:26:55.300214Z'
   attempts: 0
   kind: epic
@@ -1027,7 +1027,7 @@ units:
   - implementation
   updated_at: '2026-04-27T19:36:24.424827Z'
   has_verify: true
-  verify: cd /Users/asher/tower && rg -q 'schema_version|source_hash|source_mtime|freshness|sqlite' mana/crates/mana-core/src && cargo test -p mana-core sqlite index -- --nocapture
+  verify: cd /Users/asher/mana && rg -q 'schema_version|source_hash|source_mtime|freshness|sqlite' crates/mana-core/src && cargo test -p mana-core sqlite index -- --nocapture
   created_at: '2026-04-27T18:27:07.260706Z'
   claimed_by: imp
   attempts: 0
@@ -1049,7 +1049,7 @@ units:
   - implementation
   updated_at: '2026-04-27T19:22:35.507491Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p mana-core sqlite rebuild -- --nocapture && rg -q 'invalid.*file|diagnostic|rebuild' mana/crates/mana-core/src
+  verify: cd /Users/asher/mana && cargo test -p mana-core sqlite rebuild -- --nocapture && rg -q 'invalid.*file|diagnostic|rebuild' crates/mana-core/src
   created_at: '2026-04-27T18:27:15.351743Z'
   attempts: 0
   kind: task
@@ -1069,7 +1069,7 @@ units:
   - implementation
   updated_at: '2026-04-27T19:22:40.932415Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p mana-core sqlite write -- --nocapture && rg -q 'mark.*stale|stale.*index|update.*index' mana/crates/mana-core/src
+  verify: cd /Users/asher/mana && cargo test -p mana-core sqlite write -- --nocapture && rg -q 'mark.*stale|stale.*index|update.*index' crates/mana-core/src
   created_at: '2026-04-27T18:27:24.204402Z'
   attempts: 0
   kind: task
@@ -1091,7 +1091,7 @@ units:
   - implementation
   updated_at: '2026-04-27T19:22:44.670239Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p mana-core context sqlite -- --nocapture && rg -q 'context.*sqlite|sqlite.*context|assemble.*context' mana/crates/mana-core/src mana/crates/mana-cli/src
+  verify: cd /Users/asher/mana && cargo test -p mana-core context sqlite -- --nocapture && rg -q 'context.*sqlite|sqlite.*context|assemble.*context' crates/mana-core/src crates/mana-cli/src
   created_at: '2026-04-27T18:27:35.037540Z'
   attempts: 0
   kind: task
@@ -1113,7 +1113,7 @@ units:
   - cli
   updated_at: '2026-04-27T19:22:51.913292Z'
   has_verify: true
-  verify: cd /Users/asher/tower && cargo test -p mana-cli doctor index validate -- --nocapture && rg -q 'index rebuild|doctor|validate' mana/crates/mana-cli/src
+  verify: cd /Users/asher/mana && cargo test -p mana-cli doctor index validate -- --nocapture && rg -q 'index rebuild|doctor|validate' crates/mana-cli/src
   created_at: '2026-04-27T18:27:47.595969Z'
   attempts: 0
   kind: task
@@ -1372,7 +1372,7 @@ units:
   assignee: imp
   updated_at: '2026-04-15T08:02:47.764593Z'
   has_verify: true
-  verify: rg -n "\beprintln!\s*\(" mana/crates/mana-core -S
+  verify: rg -n "\beprintln!\s*\(" crates/mana-core -S
   created_at: '2026-04-15T07:42:55.676924Z'
   attempts: 0
   kind: task
@@ -1529,7 +1529,7 @@ units:
   - root
   updated_at: '2026-04-24T06:01:28.090763Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana show 265 >/dev/null
+  verify: cd /Users/asher/mana && mana show 265 >/dev/null
   created_at: '2026-04-16T06:49:05.051048Z'
   claimed_by: imp
   attempts: 0
@@ -1549,7 +1549,7 @@ units:
   - root
   updated_at: '2026-04-16T07:20:40.981196Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana show 265.1 >/dev/null
+  verify: cd /Users/asher/mana && mana show 265.1 >/dev/null
   created_at: '2026-04-16T07:20:40.981196Z'
   attempts: 0
   kind: task
@@ -1568,7 +1568,7 @@ units:
   - root
   updated_at: '2026-04-16T07:20:41.163837Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana show 265.2 >/dev/null
+  verify: cd /Users/asher/mana && mana show 265.2 >/dev/null
   created_at: '2026-04-16T07:20:41.163837Z'
   attempts: 0
   kind: task
@@ -1587,7 +1587,7 @@ units:
   - root
   updated_at: '2026-04-16T07:20:41.347417Z'
   has_verify: true
-  verify: cd /Users/asher/tower && mana show 265.3 >/dev/null
+  verify: cd /Users/asher/mana && mana show 265.3 >/dev/null
   created_at: '2026-04-16T07:20:41.347417Z'
   attempts: 0
   kind: task
@@ -1623,7 +1623,7 @@ units:
   - design
   updated_at: '2026-04-27T03:37:14.908445Z'
   has_verify: true
-  verify: 'mana show 272.1 --path /Users/asher/tower | rg ''status: closed|Status: closed|closed'''
+  verify: 'mana show 272.1 --path /Users/asher/mana | rg ''status: closed|Status: closed|closed'''
   created_at: '2026-04-27T03:37:14.908445Z'
   attempts: 0
   kind: task

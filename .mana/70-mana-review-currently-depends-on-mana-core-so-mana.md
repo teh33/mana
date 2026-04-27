@@ -8,7 +8,7 @@ created_at: '2026-04-09T13:26:27.753248Z'
 updated_at: '2026-04-09T13:26:27.753248Z'
 labels:
 - fact
-verify: cd /Users/asher/tower && rg -q '^mana-core = \{ path = "\.\./mana-core"' mana/crates/mana-review/Cargo.toml && ! rg -q '^mana-review\s*=' mana/crates/mana-core/Cargo.toml
+verify: cd /Users/asher/mana && rg -q '^mana-core = \{ path = "\.\./mana-core"' crates/mana-review/Cargo.toml && ! rg -q '^mana-review\s*=' crates/mana-core/Cargo.toml
 kind: epic
 unit_type: fact
 last_verified: '2026-04-09T23:16:10.195220Z'

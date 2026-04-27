@@ -8,7 +8,7 @@ created_at: '2026-04-09T13:22:11.836200Z'
 updated_at: '2026-04-09T13:22:11.836200Z'
 labels:
 - fact
-verify: cd /Users/asher/tower && mana list --all --parent 50.10 | rg -q '50\.10\.3'
+verify: cd /Users/asher/mana && mana list --all --parent 50.10 | rg -q '50\.10\.3'
 kind: epic
 unit_type: fact
 last_verified: '2026-04-09T23:16:10.195220Z'

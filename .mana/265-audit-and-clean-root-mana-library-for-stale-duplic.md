@@ -197,7 +197,7 @@ labels:
 - metadata
 - triage
 - root
-verify: cd /Users/asher/tower && mana show 265 >/dev/null
+verify: cd /Users/asher/mana && mana show 265 >/dev/null
 checkpoint: '5854ad71b63145627539c9b6a07c4f5e781a9e4e'
 verify_hash: e40932f0c50cc8aff1f29ab2b01c9d9aaf7ad6ca579eb403f512f9c70eb16cf2
 claimed_by: imp

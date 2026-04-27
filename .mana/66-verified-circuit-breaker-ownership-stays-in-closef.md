@@ -8,7 +8,7 @@ created_at: '2026-04-09T12:32:18.771941Z'
 updated_at: '2026-04-09T12:32:18.771941Z'
 labels:
 - fact
-verify: cd /Users/asher/tower && rg -q 'check_circuit_breaker|CircuitBreakerResult' mana/crates/mana-core/src/ops/close.rs mana/crates/mana-cli/src/commands/close/failure.rs && ! rg -q 'check_circuit_breaker|CircuitBreakerResult' mana/crates/mana-pool/src/dispatch.rs
+verify: cd /Users/asher/mana && rg -q 'check_circuit_breaker|CircuitBreakerResult' crates/mana-core/src/ops/close.rs crates/mana-cli/src/commands/close/failure.rs && ! rg -q 'check_circuit_breaker|CircuitBreakerResult' crates/mana-pool/src/dispatch.rs
 kind: epic
 unit_type: fact
 last_verified: '2026-04-09T23:16:10.195220Z'

@@ -8,7 +8,7 @@ created_at: '2026-04-09T13:26:51.160937Z'
 updated_at: '2026-04-09T13:26:51.160937Z'
 labels:
 - fact
-verify: cd /Users/asher/tower && rg -q 'struct ApprovalRecord' mana/crates/mana-core/src && rg -q 'struct PromotionRecord' mana/crates/mana-core/src && rg -q 'enum ReviewGateOutcome' mana/crates/mana-core/src && rg -q 'fn validate\(&self\) -> Result<\(\), String>' mana/crates/mana-core/src/unit/types.rs && cargo test -p mana-core approval_record --lib && cargo test -p mana-core promotion_record --lib && cargo check -p mana-core
+verify: cd /Users/asher/mana && rg -q 'struct ApprovalRecord' crates/mana-core/src && rg -q 'struct PromotionRecord' crates/mana-core/src && rg -q 'enum ReviewGateOutcome' crates/mana-core/src && rg -q 'fn validate\(&self\) -> Result<\(\), String>' crates/mana-core/src/unit/types.rs && cargo test -p mana-core approval_record --lib && cargo test -p mana-core promotion_record --lib && cargo check -p mana-core
 kind: epic
 unit_type: fact
 last_verified: '2026-04-09T23:16:10.195220Z'

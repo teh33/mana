@@ -12,7 +12,7 @@ closed_at: '2026-04-09T12:02:41.625966Z'
 close_reason: Reconciled stale metadata after archived unit `27.1` landed the budget-named tests. Current repo truth is preserved by fact `61` and the positive gate `cargo test -p mana-pool budget -- 2>&1 | grep 'test result' | grep -v '0 passed'`.
 kind: epic
 unit_type: fact
-verify: cd /Users/asher/tower && cargo test -p mana-pool budget -- 2>&1 | grep 'test result' | grep -v '0 passed'
+verify: cd /Users/asher/mana && cargo test -p mana-pool budget -- 2>&1 | grep 'test result' | grep -v '0 passed'
 paths:
 - '.mana/archive/2026/04/27.1-budget-and-circuit-breaker-for-dispatch.md'
 - '.mana/61-mana-pool-budget-filter-currently-matches-2-dispat.md'
