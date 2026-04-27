@@ -2,6 +2,9 @@
 
 # Track migrated mana graph; ignore local runtime logs/state.
 .mana/agent_history.jsonl
+.mana/archive.yaml
+.mana/index.yaml
+.mana/index.lock
 .mana/runs/
 .mana/index/
 .mana/tmp/
