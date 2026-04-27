@@ -18,16 +18,16 @@ fn parse_priority(s: &str) -> Result<u8, String> {
 #[derive(Parser)]
 #[command(
     name = "mana",
-    about = "Task tracker for coding agents",
+    about = "Agent work coordination and project memory",
     version,
     help_template = "\
 {about-with-newline}
 Usage: {usage}
 
 Commands:
-  TASKS
+  WORK UNITS
     init         Initialize .mana/ in the current directory
-    create       Create a new task or epic [aliases: new]
+    create       Create a new task, epic, or fact-backed unit [aliases: new]
     read         Display full unit details [aliases: show, view]
     list         List/search/filter units [aliases: ls]
     edit         Edit unit in $EDITOR
