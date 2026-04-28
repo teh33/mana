@@ -2,128 +2,79 @@
 
 [![CI](https://github.com/kfcafe/mana/actions/workflows/ci.yml/badge.svg)](https://github.com/kfcafe/mana/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/mana-cli)](https://crates.io/crates/mana-cli)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE-AGPL)
 [![dependency status](https://deps.rs/repo/github/kfcafe/mana/status.svg)](https://deps.rs/repo/github/kfcafe/mana)
 
-Mana is the medium for coding agent work: it gives that work structure, verification, dependencies, and memory.
+Mana is a local-first work coordination system for coding agents. It turns agent work into durable Markdown records with explicit scope, dependencies, verification gates, attempts, notes, and facts.
 
-It turns work that would normally disappear into prompts and scrollback into durable units that can be verified, retried, decomposed, and built on over time.
-
-Plain Markdown files in `.mana/`. Any agent that can read files and run shell commands is fluent in mana.
+Instead of losing plans and failures in chat scrollback, mana keeps work legible enough for another agent, or a human, to pick up cold.
 
 ```bash
-mana init --agent claude
+mana init
 mana create "Add CSV export" --verify "cargo test csv::export"
 imp run <unit-id>
 ```
 
-## Contents
+## Why mana
 
-- [Why mana exists](#why-mana-exists)
-- [The core model](#the-core-model)
-- [Install](#install)
-- [Quick start](#quick-start)
-- [How mana works](#how-mana-works)
-- [Working with agents](#working-with-agents)
-- [Fail-first development](#fail-first-development)
-- [Decomposition and dependencies](#decomposition-and-dependencies)
-- [Facts and memory](#facts-and-memory)
-- [Command reference](#command-reference)
-- [Configuration](#configuration)
-- [Documentation](#documentation)
+Coding agents are effective, but their default working medium is fragile:
 
-## Why mana exists
+- plans live in prompts or monolithic md files
+- “done” is ambiguous
+- retries restart without context
+- dependencies stay implicit
+- useful failures disappear into logs
 
-Coding agents are powerful, but their work is usually ephemeral.
+Mana gives agent work a durable shape:
 
-- The plan lives in a prompt
-- "Done" is often vague
-- Retries start cold
-- Dependencies stay implicit
-- Useful lessons vanish into logs
+- **units** describe the work
+- **verify gates** define completion
+- **dependencies** encode order
+- **attempts and notes** preserve execution history
+- **facts** capture verified project memory
 
-Mana gives that work a durable shape.
+Everything is stored in `.mana/` as plain files, so the system is inspectable, git-friendly, and usable by any agent that can read files and run shell commands.
 
-A unit says **what to do**. A verify gate says **how to know it's done**. Dependencies say **what it relies on**. Attempts, notes, and facts record **what was learned**.
+## Core concepts
 
-Mana is the cross-agent durable substrate and work medium for this work.
-It is where work becomes durable enough for another worker to inherit cold.
+### Task
 
-Agents come and go. Mana keeps the work legible.
+A task is one executable unit of work. It should have a concrete goal, useful context, relevant paths, and a verify command that exits `0` when the task is complete.
 
-## The core model
-
-Mana teaches a public model of **epics, jobs, and facts**.
-
-Mana tracks three main kinds of work records:
-
-### Job
-A **job** is one executable task.
-
-It has:
-- an ID
-- a title
-- a status
-- a verify command
-- optional description, acceptance criteria, paths, labels, and notes
-
-Jobs are what `imp run <unit-id>` should execute against the mana substrate. `mana run` is legacy/compatibility behavior on the path to disappearing.
+```bash
+mana create "Fix login redirect" \
+  --verify "cargo test auth::redirect" \
+  --paths "crates/app/src/auth.rs,crates/app/tests/auth.rs"
+```
 
 ### Epic
-An **epic** is a parent/grouping record for larger work.
 
-Epics group and decompose larger efforts.
+An epic is a non-dispatchable parent used to organize larger work. Use epics for features, migrations, audits, and refactors that need decomposition before execution.
 
-Epics help you:
-- decompose larger efforts into child jobs
-- track progress across a subtree
-- keep structure without dispatching an intermediate parent as if it were executable work
-
-An epic may still have rich description and acceptance context, but it is not the default target for agent execution. Break epics into child jobs.
+```bash
+mana create "Improve onboarding flow" --epic
+mana create "Add empty-state copy" --parent 1 --verify "cargo test onboarding_empty_state"
+```
 
 ### Fact
-A **fact** is verified project knowledge.
 
-Facts are not implementation work. They capture durable knowledge with a verify command so agents can reuse what was learned.
+A fact is verified project knowledge. Facts are useful for durable architecture notes, environment requirements, and constraints that agents should not rediscover repeatedly.
+
+```bash
+mana fact "Tests require Docker" --verify "docker info >/dev/null 2>&1" --ttl 90
+mana verify-facts
+```
 
 ### Verify gate
-Every executable job has a **verify gate**: a shell command that must exit `0` before the job can close.
 
-This makes "done" machine-checkable.
+A verify gate is a shell command attached to a task. `mana close <id>` runs the command before closing the task. If the command fails, the task stays open and the failure is recorded for the next attempt.
 
-### Graph
-Units form a graph through:
-- **parent / child** relationships for decomposition
-- **dependencies** for ordering
-- **produces / requires** for artifact-based coordination
-
-### Memory
-Mana keeps context with the work itself:
-- failed attempts
-- notes
-- verified facts
-- related files
-- dependency context
-- rich durable results and handoff context when they are cheap to capture and useful for the next worker
-
-### Medium
-Everything lives in `.mana/` as plain files.
-
-That means the system is:
-- local-first
-- git-friendly
-- inspectable
-- agent-agnostic
-- resilient when any one tool or process dies
-
-## Install
+## Installation
 
 ```bash
 cargo install mana-cli
 ```
 
-<details>
-<summary>Build from source</summary>
+Build from source:
 
 ```bash
 git clone https://github.com/kfcafe/mana
@@ -132,420 +83,285 @@ cargo build --release
 cp target/release/mana ~/.local/bin/
 ```
 
-</details>
-
 ## Quick start
 
-Initialize a project:
+Initialize mana in a project:
 
 ```bash
-mana init --agent claude
+mana init
 ```
 
-Create a job:
+Create a task with a verify gate:
 
 ```bash
-mana create "Fix CSV export" --verify "cargo test csv"
+mana create "Fix CSV export" --verify "cargo test csv::export"
 ```
 
-Create another job:
+Inspect the queue:
 
 ```bash
-mana create "Add pagination" --verify "cargo test page"
-```
-
-Run a job with imp:
-
-```bash
-imp run <unit-id>
-```
-
-Inspect mana state around it:
-
-```bash
-mana agents
-mana logs 3
 mana status
+mana next
+mana show 1
 ```
 
-Manual workflow:
+Run the task with an agent runtime:
 
 ```bash
-mana quick "Fix CSV export" --verify "cargo test csv"
+imp run 1
+```
+
+Verify and close manually:
+
+```bash
 mana verify 1
 mana close 1
 ```
 
-## How mana works
+> [!TIP]
+> Prefer targeted verify commands. `cargo test parser::handles_unicode` is usually a better task gate than a broad project-wide test suite.
 
-Work lives in Markdown records inside `.mana/`:
+## How it works
+
+Mana stores records in `.mana/`:
 
 ```text
 .mana/
+├── config.yaml
+├── index.yaml
 ├── 1-add-csv-export.md
-├── 2-add-tests.md
-├── 2.1-unit-tests.md
-└── archive/2026/01/
+├── 2-improve-errors.md
+├── 2.1-add-error-type.md
+└── archive/2026/04/
 ```
 
-A job looks like this:
+A task is a Markdown file with YAML frontmatter:
 
 ```yaml
 ---
 id: "1"
 title: Add CSV export
-status: in_progress
+kind: task
+status: open
 verify: cargo test csv::export
-attempts: 0
+paths:
+  - crates/app/src/export.rs
+  - crates/app/tests/export.rs
 ---
 
-Add a `--format csv` flag to the export command.
+Add a `--format csv` option to the export command.
 
-**Files:** src/export.rs, tests/export_test.rs
+Acceptance:
+- existing JSON export behavior is unchanged
+- CSV output includes headers
+- `cargo test csv::export` passes
 ```
 
-When you run `mana close 1` on a job:
+The normal loop is:
 
-1. Mana runs the verify command
-2. Exit `0` → the unit closes and archives
-3. Non-zero exit → the unit stays open and the failure is recorded for the next attempt
-
-That simple loop is the foundation:
-
-**define → attempt → verify → learn → retry or close**
-
-In the happy path, mana also serves as the durable handoff point:
-1. work is expressed durably in mana
-2. a worker like imp picks up the unit with relevant prior state
-3. the worker executes live work
-4. the worker writes a rich durable result back into mana
-5. future workers inherit selectively from mana rather than replaying full session logs
+1. define the work as a task
+2. claim or dispatch it
+3. attempt the implementation
+4. run the verify gate
+5. close on success, or record failure context and retry
 
 ## Working with agents
 
-Configure an agent/runtime once, then execute mana-shaped work through imp:
+Mana is agent-agnostic. The recommended boundary is to let an agent runtime execute a single mana task:
 
 ```bash
-mana init --agent claude
+mana run <unit-id>
 ```
 
-Or set the runtime command template directly:
+You can also configure command templates for compatible runtimes:
 
 ```bash
-mana config set run "imp run {id}"
+mana config set-project run "imp run {id}"
+mana config set-project plan "imp plan {id}"
 ```
 
 `{id}` is replaced with the unit ID.
 
-`mana run` still exists in the current repo as legacy/compatibility behavior, but the intended long-term boundary is `imp run {id}`: imp reads mana state and performs the task.
-
-### Legacy orchestration compatibility
-
-The current repo still has `mana run` and related config/model settings.
-Treat that as compatibility behavior during migration, not as the intended long-term architecture.
-The preferred execution framing is:
+Useful commands while agents are working:
 
 ```bash
-imp run <unit-id>
+mana agents      # running and recently completed agents
+mana logs 3      # logs for unit 3
+mana status      # claimed, ready, blocked, and grouped work
+mana context 3   # agent briefing for a unit
 ```
 
-### Batch verify
+## Planning and decomposition
 
-When parallel agents share the same verify command (e.g. `cargo build`), each agent running it independently causes lock contention and redundant work. Enable batch verify to run each unique command once:
+Use epics and child tasks when work is too broad for one safe attempt:
 
 ```bash
-mana config set batch_verify true
+mana create "Refactor import pipeline" --epic
+mana create "Extract parser interface" --parent 1 --verify "cargo test parser_interface" --produces ParserInterface
+mana create "Move CSV parser" --parent 1 --requires ParserInterface --verify "cargo test csv_parser"
+mana create "Move JSON parser" --parent 1 --requires ParserInterface --verify "cargo test json_parser"
 ```
 
-With batch verify enabled:
-1. Agents skip verify and exit after calling `mana close`
-2. The runner collects all completed units
-3. Groups them by verify command and runs each command once
-4. Passing units close normally; failing units reopen for retry
-
-### Monitoring
+Dependencies can be explicit:
 
 ```bash
-mana agents                 # Show running/completed agents
-mana logs 3                 # View agent output for unit 3
-mana status                 # See what's ready, blocked, or in flight
-```
-
-### Agent context
-
-`mana context <id>` produces a complete briefing for an agent about a job or epic:
-
-1. unit spec
-2. previous attempts
-3. project rules
-4. dependency context
-5. file structure
-6. relevant file contents
-
-```bash
-mana context 5
-mana context 5 --structure-only
-mana context 5 --json
-mana context                 # No ID: project-wide memory context
-```
-
-This is how agents stay grounded in the work instead of re-deriving context from scratch.
-
-## Fail-first development
-
-Mana defaults to **fail-first**.
-
-Before a unit is created, the verify command runs and must fail.
-
-- If it already passes, the unit is rejected
-- If it fails, the unit is accepted
-- Later, `mana close` runs the same verify command and it must pass
-
-```bash
-# Rejected: verify already passes
-mana quick "..." --verify "python -c 'assert True'"
-
-# Accepted: real failing check
-mana quick "..." --verify "pytest test_unicode.py"
-```
-
-Use `--pass-ok` (`-p`) when fail-first is not appropriate, like refactors or safety checks:
-
-```bash
-mana quick "extract helper" --verify "cargo test" -p
-mana quick "remove secrets" --verify "! grep 'api_key' src/" -p
-```
-
-## Decomposition and dependencies
-
-### Parent / child units
-
-Break large work into smaller units:
-
-```bash
-mana create "Search feature" --verify "make test-search"
-mana create "Index builder" --parent 1 --verify "cargo test index::build"
-mana create "Query parser" --parent 1 --verify "cargo test query::parse"
-
+mana dep add 3 2
 mana tree 1
 ```
 
-Parents can auto-close when all children close.
-
-### Dependencies
-
-Coordinate units explicitly:
+Or artifact-based:
 
 ```bash
-mana create "Define schema types" --parent 1 \
-  --produces "Schema,FieldType" \
-  --verify "cargo test schema::types"
-
-mana create "Build query engine" --parent 1 \
-  --requires "Schema" \
-  --verify "cargo test query::engine"
+mana create "Define schema" --produces Schema --verify "cargo test schema"
+mana create "Build query engine" --requires Schema --verify "cargo test query"
 ```
 
-Mana blocks work until its dependencies are satisfied.
-
-### Sequential chaining
+Sequential work can be chained:
 
 ```bash
-mana create "Step 1: scaffold" --verify "cargo build"
-mana create next "Step 2: implement" --verify "cargo test"
-mana create next "Step 3: docs" --verify "grep -q 'API' README.md"
+mana create "Step 1: scaffold" --verify "cargo check"
+mana create next "Step 2: implement" --verify "cargo test feature"
+mana create next "Step 3: document" --verify "grep -q 'Feature' README.md"
 ```
 
-Each `next` unit automatically depends on the previous one.
+## Fail-first checks
 
-### Planning
+By default, mana expects a task’s verify command to fail when the task is created. This prevents creating tasks whose completion check already passes.
+
+Use `--pass-ok` for refactors, documentation, cleanup, or safety checks where the command may already pass:
 
 ```bash
-mana plan 3
-mana plan --auto
-mana plan --dry-run
+mana create "Clean clippy warnings" --verify "cargo clippy --workspace --all-targets -- -D warnings" --pass-ok
+mana create "Rewrite README" --verify "grep -q '## Quick start' README.md" --pass-ok
 ```
 
-Use planning when a unit is too large or underspecified for a single attempt.
-
-## Facts and memory
-
-Mana can also store verified project facts.
+## Command overview
 
 ```bash
-mana fact "DB is PostgreSQL" --verify "grep -q 'postgres' docker-compose.yml" -p
-mana fact "Tests require Docker" --verify "docker info >/dev/null 2>&1" --ttl 90
-mana verify-facts
-mana recall "database"
-```
-
-Facts appear in context and can go stale if their verification expires or fails.
-
-This gives agents a durable memory that lives outside chat history.
-
-## Command reference
-
-### Unit lifecycle
-
-```bash
-mana create "title" --verify "cmd"      # Create a unit
-mana create "title" -p                  # Skip fail-first
-mana create next "title" --verify "cmd"
-mana quick "title" --verify "cmd"       # Create + claim
+# lifecycle
+mana create "title" --verify "cmd"
+mana create "title" --epic
+mana quick "title" --verify "cmd"
 mana claim <id>
+mana update <id>
 mana verify <id>
 mana close <id>
-mana close --defer-verify <id>
-mana close --failed <id>
-mana update <id>
-mana edit <id>
-mana delete <id>
 mana reopen <id>
-mana unarchive <id>
-```
+mana delete <id>
 
-### Orchestration (legacy compatibility during migration)
-
-```bash
-mana run [id] [-j N]        # legacy/compatibility behavior
-mana run --loop-mode        # legacy/compatibility behavior
-mana run --review           # legacy/compatibility behavior
-mana plan <id>
-mana review <id>
-mana agents
-mana logs <id>
-```
-
-### Inspecting the graph
-
-```bash
+# graph and queue
 mana status
-mana show <id>
+mana next
 mana list
+mana show <id>
 mana tree [id]
 mana graph
 mana trace <id>
-mana context [id]
-mana recall "query"
-```
 
-### Dependencies and memory
-
-```bash
+# dependencies and memory
 mana dep add <id> <dep-id>
 mana dep remove <id> <dep-id>
 mana fact "title" --verify "cmd"
 mana verify-facts
-```
+mana recall "query"
 
-### Maintenance and integration
+# agents and context
+mana context [id]
+mana run [id]
+mana plan <id>
+mana agents
+mana logs <id>
+mana review <id>
+mana diff <id>
 
-```bash
+# maintenance and integration
 mana tidy
-mana doctor              # graph/index health + stale config checks
-mana doctor fix          # apply safe, deterministic fixes
-mana sync
-mana locks [--clear]
-mana config get <key>
-mana config get-project <key>
-mana config get-global <key>
-mana config set <key> <value>
-mana config set-project <key> <value>
-mana config set-global <key> <value>
+mana doctor
+mana doctor fix
+mana config inspect
 mana mcp serve
 mana completions <shell>
 ```
 
-### Pipe-friendly usage
+See command-specific help for options and examples:
 
 ```bash
-mana create "fix parser" --verify "cargo test" -p --json | jq -r '.id'
+mana create --help
+mana run --help
+mana config --help
+```
+
+## Pipe-friendly usage
+
+```bash
+mana create "fix parser" --verify "cargo test parser" --pass-ok --json | jq -r '.id'
 mana list --json | jq '.[] | select(.priority == 0)'
 mana list --ids | mana close --stdin --force
-cat spec.md | mana create "task" --description - --verify "cmd"
+cat spec.md | mana create "Implement spec" --description - --verify "cargo test spec"
 mana list --format '{id}\t{status}\t{title}'
 ```
 
 ## Configuration
 
-Project configuration lives in `.mana/config.yaml`.
+Project configuration lives in `.mana/config.yaml`. Global configuration lives under the user mana config directory.
 
 ```bash
-mana config set-project run "claude -p 'read unit {id}, implement it, then run mana close {id}'"
-mana config set-project plan "claude -p 'read unit {id} and split it into subtasks'"
-mana config set-global run "imp --model {model} run {id}"
-mana config set-global run_model gpt-5.4
-mana config set-global plan_model gpt-5.4
+mana config set-project run "imp run {id}"
+mana config set-project plan "imp plan {id}"
 mana config set-project max_concurrent 4
-mana config get run_model
-mana config get-project run
-mana config get-global run
+mana config set-project batch_verify true
 mana config inspect
-mana config inspect run_model
-mana config doctor
 ```
 
-Model settings let you pick different defaults for different kinds of agent work:
-- `mana config get` returns the effective merged value
-- `mana config get-project` and `mana config get-global` show raw scoped values
-- `mana config inspect` shows effective values and whether they come from project config, global config, or built-in defaults
-- `mana config doctor` focuses just on config drift and inheritance issues
-- `mana doctor` now includes those config checks alongside graph/index health
-- `mana doctor fix` applies safe, deterministic fixes like index rebuilds
+Common settings:
 
-- `run_model` currently powers legacy `mana run` behavior during migration
-- `plan_model` powers `mana plan`
-- `review_model` powers AI review flows
-- `research_model` powers project-level research/planning
+| Key | Description |
+| --- | --- |
+| `run` | Agent command template for task execution. `{id}` is replaced with the unit ID. |
+| `plan` | Agent command template for decomposing larger work. |
+| `run_model` | Default model for run-compatible agent flows. |
+| `plan_model` | Default model for planning flows. |
+| `review_model` | Default model for review flows. |
+| `max_concurrent` | Maximum parallel agents. |
+| `max_loops` | Maximum run-loop cycles before stopping. |
+| `verify_timeout` | Default verify timeout in seconds. |
+| `rules_file` | Rules file included in `mana context`. |
+| `file_locking` | Avoid scheduling concurrent tasks with overlapping paths. |
+| `batch_verify` | Run shared verify commands once after agents complete. |
+| `auto_close_parent` | Close parent units when all children are closed. |
+| `auto_commit` | Commit changes when a unit closes. |
+| `on_close` / `on_fail` | Hook templates for close and failure events. |
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `run` | — | Command template for agent/runtime execution. `{id}` = unit ID. Prefer `imp run {id}`. |
-| `plan` | — | Command template to split large units. |
-| `run_model` | — | Default model for legacy `mana run` behavior during migration. |
-| `plan_model` | — | Default model for `mana plan`. |
-| `review_model` | — | Default model for AI review flows. |
-| `research_model` | — | Default model for project-level research/planning. |
-| `max_concurrent` | `4` | Max parallel agents. |
-| `max_loops` | `10` | Max agent loops before stopping (`0` = unlimited). |
-| `poll_interval` | `30` | Seconds between loop mode cycles. |
-| `auto_close_parent` | `true` | Close parent when all children close. |
-| `verify_timeout` | — | Default verify timeout in seconds. |
-| `rules_file` | — | Path to rules file injected into `mana context`. |
-| `file_locking` | `false` | Lock unit `paths` files during concurrent work. |
-| `extends` | `[]` | Parent config files to inherit from. |
-| `batch_verify` | `false` | Batch shared verify commands: run each once after agents complete. |
-| `auto_commit` | `false` | Commit all changes on close. Skipped in worktree mode. |
-| `commit_template` | `feat(mana-{id}): {title}` | Template for auto-commit messages. Vars: `{id}`, `{title}`, `{parent_id}`, `{labels}`. |
-| `on_close` | — | Hook after close. Vars: `{id}`, `{title}`, `{status}`, `{branch}`. |
-| `on_fail` | — | Hook after verify failure. Vars: `{id}`, `{title}`, `{attempt}`, `{output}`, `{branch}`. |
-| `review.run` | — | Review agent command. Falls back to `run`. |
-| `review.max_reopens` | `2` | Max review reopen cycles. |
+> [!WARNING]
+> Do not store secrets in mana config or unit files. Use environment variables or your agent/runtime’s secret mechanism.
 
-### Config inheritance
+## MCP integration
 
-```yaml
-# .mana/config.yaml
-extends:
-  - ~/.mana/global-config.yaml
-project: my-app
-run: "claude -p 'read unit {id}, implement it, then run mana close {id}'"
+Mana includes an MCP server for IDE and agent integrations:
+
+```bash
+mana mcp serve
 ```
 
-Child values override parent. Multiple parents are applied in order; later values win.
+The MCP surface exposes project status, unit context, tree views, and common unit operations to compatible clients.
 
-Use `extends` for shared non-secret defaults such as agent command templates or concurrency settings. Do not use it as a secret-distribution mechanism.
+## Development
+
+```bash
+cargo check --workspace --all-targets
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+The workspace contains:
+
+- `crates/mana-core` — durable model, operations, config, index, graph, verification
+- `crates/mana-cli` — CLI commands, output, MCP server, runtime adapters
+- `crates/mana-review` — review queue, feedback, rendering, risk helpers
 
 ## Documentation
 
-- [Agent Skill](docs/SKILL.md) — Quick reference for AI agents
-- [Best Practices](docs/BEST_PRACTICES.md) — Writing effective units for agents
-- `mana --help` — Full command reference
-
-## Contributing
-
-Contributions welcome. Fork the repo, create a branch, and open a pull request.
-
-## License
-
-[AGPL-3.0](LICENSE-AGPL) (CLI) / [Apache-2.0](LICENSE-APACHE) (core library)
+- `mana --help` — command groups and examples
+- `mana <command> --help` — detailed command help
+- `CONTRIBUTING.md` — contribution workflow
+- `CHANGELOG.md` — release history

@@ -373,9 +373,8 @@ impl Index {
             } else if path.is_file() {
                 if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
                     if is_unit_filename(filename) {
-                        match Unit::from_file(&path) {
-                            Ok(unit) => entries.push(IndexEntry::from(&unit)),
-                            Err(_) => {} // parse error or guarded parser panic, skip silently
+                        if let Ok(unit) = Unit::from_file(&path) {
+                            entries.push(IndexEntry::from(&unit));
                         }
                     }
                 }

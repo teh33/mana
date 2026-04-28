@@ -5,9 +5,15 @@ edition = "2021"
 rust-version = "1.85"
 description = "Resource-aware dispatch engine for mana agents"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/kfcafe/mana"
+homepage = "https://github.com/kfcafe/mana"
+readme = "../../README.md"
+keywords = ["ai-agents", "orchestration", "dispatch", "coordination"]
+categories = ["development-tools"]
 
 [dependencies]
-mana-core = { path = "../mana-core" }
+mana-core = { path = "../mana-core", version = "0.3.0" }
 anyhow = "1"
 sysinfo = "0.33"
 tempfile = "3"
+

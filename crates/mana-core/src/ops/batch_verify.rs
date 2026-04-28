@@ -273,7 +273,7 @@ mod tests {
 
     /// Write a unit in AwaitingVerify status to disk.
     fn write_awaiting(mana_dir: &Path, id: &str, verify_cmd: &str) {
-        let mut unit = Unit::new(id, &format!("Task {}", id));
+        let mut unit = Unit::new(id, format!("Task {}", id));
         unit.status = Status::AwaitingVerify;
         unit.verify = Some(verify_cmd.to_string());
         let slug = id.replace('.', "-");

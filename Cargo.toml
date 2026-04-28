@@ -4,6 +4,7 @@ members = [
     "crates/mana-core",
     "crates/mana-cli",
     "crates/mana-review",
+    "crates/mana-pool",
 ]
 
 [workspace.package]

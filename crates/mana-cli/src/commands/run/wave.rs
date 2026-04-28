@@ -319,6 +319,7 @@ pub(super) fn run_wave(
 }
 
 /// Template mode: spawn agents via `sh -c <template>` (backward compat).
+#[allow(clippy::too_many_arguments)]
 fn run_wave_template(
     units: &[SizedUnit],
     run_template: &str,

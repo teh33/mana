@@ -401,6 +401,7 @@ pub fn run_dispatch(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_dispatch_with_options(
     config: &PoolConfig,
     units: &[DispatchUnit],
@@ -710,7 +711,7 @@ fn run_dispatch_with_options(
         results.push(result);
     }
 
-    return finish_dispatch(config, units, results, any_failed, event_tx, started);
+    finish_dispatch(config, units, results, any_failed, event_tx, started)
 }
 
 /// Check if a unit's dependencies are satisfied.
@@ -2137,7 +2138,7 @@ mod tests {
         let u = unit("1", &[]);
         let completed = HashSet::new();
         let all_ids: HashSet<String> = ["1"].iter().map(|s| s.to_string()).collect();
-        assert!(is_ready(&u, &completed, &all_ids, &[u.clone()]));
+        assert!(is_ready(&u, &completed, &all_ids, std::slice::from_ref(&u)));
     }
 
     #[test]

@@ -63,21 +63,16 @@ pub enum AutonomyBlockerCode {
 }
 
 /// Current approval posture for autonomy gating.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ApprovalState {
+    #[default]
     Unknown,
     NotRequired,
     Required,
     Pending,
     Approved,
     Rejected,
-}
-
-impl Default for ApprovalState {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Current review posture for autonomy gating.

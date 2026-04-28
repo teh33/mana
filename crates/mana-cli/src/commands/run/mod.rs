@@ -1938,10 +1938,10 @@ mod tests {
         )
         .unwrap();
 
-        let intermediate = Unit::from_file(&mana_dir.join("1.1-intermediate.md")).unwrap();
-        let nested_leaf = Unit::from_file(&mana_dir.join("1.1.1-nested-leaf.md")).unwrap();
-        let sibling_leaf = Unit::from_file(&mana_dir.join("1.2-sibling-leaf.md")).unwrap();
-        let parent = Unit::from_file(&mana_dir.join("1-parent.md")).unwrap();
+        let intermediate = Unit::from_file(mana_dir.join("1.1-intermediate.md")).unwrap();
+        let nested_leaf = Unit::from_file(mana_dir.join("1.1.1-nested-leaf.md")).unwrap();
+        let sibling_leaf = Unit::from_file(mana_dir.join("1.2-sibling-leaf.md")).unwrap();
+        let parent = Unit::from_file(mana_dir.join("1-parent.md")).unwrap();
 
         assert_eq!(nested_leaf.status, Status::Closed);
         assert_eq!(sibling_leaf.status, Status::Closed);
