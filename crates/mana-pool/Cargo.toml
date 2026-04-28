@@ -12,7 +12,7 @@ keywords = ["ai-agents", "orchestration", "dispatch", "coordination"]
 categories = ["development-tools"]
 
 [dependencies]
-mana-core = { path = "../mana-core", version = "0.3.0" }
+mana-core = { path = "../mana-core", version = "0.3.1" }
 anyhow = "1"
 sysinfo = "0.33"
 tempfile = "3"

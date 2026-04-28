@@ -130,16 +130,13 @@ pub fn adopt(mana_dir: &Path, parent_id: &str, child_ids: &[String]) -> Result<A
         .with_context(|| format!("Failed to load parent unit '{}'", parent_id))?;
 
     let mut id_map: HashMap<String, String> = HashMap::new();
-    let mut next_num = next_child_number(mana_dir, parent_id)?;
-
-    for old_id in child_ids {
+    for (next_num, old_id) in (next_child_number(mana_dir, parent_id)?..).zip(child_ids.iter()) {
         let old_path = find_unit_file(mana_dir, old_id)
             .with_context(|| format!("Child unit '{}' not found", old_id))?;
         let mut unit = Unit::from_file(&old_path)
             .with_context(|| format!("Failed to load child unit '{}'", old_id))?;
 
         let new_id = format!("{}.{}", parent_id, next_num);
-        next_num += 1;
 
         unit.id = new_id.clone();
         unit.parent = Some(parent_id.to_string());

@@ -1,6 +1,6 @@
 [package]
 name = "mana-cli"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 rust-version = "1.85"
 description = "Coordination substrate for AI coding agents — verified gates, dependency-aware scheduling, and multi-agent orchestration"
@@ -32,7 +32,7 @@ name = "mana"
 path = "src/main.rs"
 
 [dependencies]
-mana-core = { path = "../mana-core", version = "0.3.0" }
+mana-core = { path = "../mana-core", version = "0.3.1" }
 mana-pool = { path = "../mana-pool", version = "0.1.0" }
 anyhow = "1"
 chrono = { version = "0.4.20", features = ["serde"] }

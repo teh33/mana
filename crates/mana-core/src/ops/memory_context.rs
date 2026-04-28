@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::path::Path;
 
 use anyhow::Result;
@@ -149,7 +150,7 @@ pub fn memory_context(mana_dir: &Path) -> Result<MemoryContext> {
         }
     }
 
-    relevant_facts.sort_by(|a, b| b.score.cmp(&a.score));
+    relevant_facts.sort_by_key(|fact| Reverse(fact.score));
 
     // Recent work (closed in last 7 days)
     let mut recent_work: Vec<RecentWork> = Vec::new();
