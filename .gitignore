@@ -33,3 +33,6 @@ tools/
 DESIGN-*.md
 VIBES.md
 VIBECHECK.md
+
+# Archived local code not published as part of workspace
+.archive/

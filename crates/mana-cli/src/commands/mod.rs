@@ -29,7 +29,6 @@ pub mod quick;
 pub mod recall;
 pub mod reopen;
 pub mod review;
-pub mod review_human;
 pub mod run;
 pub mod search;
 pub mod show;

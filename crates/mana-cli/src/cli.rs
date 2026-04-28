@@ -1130,55 +1130,39 @@ Examples:
     ///
     /// Spawns a review agent with the unit's spec + current git diff as context.
     /// The review agent outputs a verdict: approve, request-changes, or flag.
-    ///
-    ///   approve        — labels unit as `reviewed`
-    ///   request-changes — reopens unit with review notes, labels `review-failed`
-    ///   flag           — labels unit `needs-human-review`, stays closed
-    ///
-    /// Configure the review agent in .mana/config.yaml:
-    ///   review:
-    ///     run: "pi -p 'review unit {id}: ...'"
-    ///     max_reopens: 2
-    ///
-    /// Falls back to the global `run` template if review.run is not set.
-    /// Use `mana run --review` to auto-review after every close during a run.
     #[command(
         display_order = 39,
         after_help = "\
 Examples:
-  mana review                              Show review queue (units awaiting review)
-  mana review 5                            Open HTML review page for unit 5
-  mana review 5 --approve                  Approve unit 5
-  mana review 5 --request-changes 'fix X'  Request changes with feedback
-  mana review 5 --reject 'wrong approach'  Reject unit 5
-  mana review 5 --agent                    Run AI adversarial review (old behavior)
-  mana review 5 --agent --model claude     AI review with specific model"
+  mana review 5                     Run AI adversarial review for unit 5
+  mana review 5 --diff              Review only the current git diff
+  mana review 5 --model claude      Review with a specific model"
     )]
     Review {
-        /// Unit ID to review (omit to show review queue)
+        /// Unit ID to review
         id: Option<String>,
 
-        /// Approve the unit
-        #[arg(long)]
+        /// Approve the unit (reserved; human review UI is archived)
+        #[arg(long, hide = true)]
         approve: bool,
 
-        /// Request changes with feedback message
-        #[arg(long, value_name = "FEEDBACK")]
+        /// Request changes with feedback message (reserved; human review UI is archived)
+        #[arg(long, hide = true, value_name = "FEEDBACK")]
         request_changes: Option<String>,
 
-        /// Reject the unit with a reason
-        #[arg(long, value_name = "REASON")]
+        /// Reject the unit with a reason (reserved; human review UI is archived)
+        #[arg(long, hide = true, value_name = "REASON")]
         reject: Option<String>,
 
-        /// Run AI adversarial review instead of human review
-        #[arg(long)]
+        /// Reserved for compatibility; agent review is the only active mode
+        #[arg(long, hide = true)]
         agent: bool,
 
-        /// Include only the git diff (agent mode)
+        /// Include only the git diff
         #[arg(long)]
         diff: bool,
 
-        /// Override model (agent mode)
+        /// Override model
         #[arg(long)]
         model: Option<String>,
     },

@@ -357,7 +357,6 @@ The workspace contains:
 
 - `crates/mana-core` — durable model, operations, config, index, graph, verification
 - `crates/mana-cli` — CLI commands, output, MCP server, runtime adapters
-- `crates/mana-review` — review queue, feedback, rendering, risk helpers
 
 ## Documentation
 
