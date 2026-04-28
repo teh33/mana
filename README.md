@@ -4,69 +4,36 @@
 [![Crates.io](https://img.shields.io/crates/v/mana-cli)](https://crates.io/crates/mana-cli)
 [![dependency status](https://deps.rs/repo/github/kfcafe/mana/status.svg)](https://deps.rs/repo/github/kfcafe/mana)
 
-Mana is a local-first work coordination system for coding agents. It turns agent work into durable Markdown records with explicit scope, dependencies, verification gates, attempts, notes, and facts.
+Mana is a local-first coordination system for AI coding agents. It turns work into durable Markdown records with clear scope, dependencies, verification gates, attempts, notes, and facts.
 
-Instead of losing plans and failures in chat scrollback, mana keeps work legible enough for another agent, or a human, to pick up cold.
+Use it when agent work needs to survive beyond one chat session: planning, delegation, retries, handoffs, audits, and multi-step implementation.
 
 ```bash
 mana init
 mana create "Add CSV export" --verify "cargo test csv::export"
-imp run <unit-id>
+mana status
 ```
 
 ## Why mana
 
 Coding agents are effective, but their default working medium is fragile:
 
-- plans live in prompts or monolithic md files
+- plans live in prompts or ad hoc Markdown files
 - “done” is ambiguous
 - retries restart without context
 - dependencies stay implicit
 - useful failures disappear into logs
 
-Mana gives agent work a durable shape:
+Mana gives that work a durable shape:
 
-- **units** describe the work
+- **tasks** describe executable work
+- **epics** organize larger efforts
 - **verify gates** define completion
 - **dependencies** encode order
 - **attempts and notes** preserve execution history
 - **facts** capture verified project memory
 
-Everything is stored in `.mana/` as plain files, so the system is inspectable, git-friendly, and usable by any agent that can read files and run shell commands.
-
-## Core concepts
-
-### Task
-
-A task is one executable unit of work. It should have a concrete goal, useful context, relevant paths, and a verify command that exits `0` when the task is complete.
-
-```bash
-mana create "Fix login redirect" \
-  --verify "cargo test auth::redirect" \
-  --paths "crates/app/src/auth.rs,crates/app/tests/auth.rs"
-```
-
-### Epic
-
-An epic is a non-dispatchable parent used to organize larger work. Use epics for features, migrations, audits, and refactors that need decomposition before execution.
-
-```bash
-mana create "Improve onboarding flow" --epic
-mana create "Add empty-state copy" --parent 1 --verify "cargo test onboarding_empty_state"
-```
-
-### Fact
-
-A fact is verified project knowledge. Facts are useful for durable architecture notes, environment requirements, and constraints that agents should not rediscover repeatedly.
-
-```bash
-mana fact "Tests require Docker" --verify "docker info >/dev/null 2>&1" --ttl 90
-mana verify-facts
-```
-
-### Verify gate
-
-A verify gate is a shell command attached to a task. `mana close <id>` runs the command before closing the task. If the command fails, the task stays open and the failure is recorded for the next attempt.
+Everything lives in `.mana/` as plain files, so the system is inspectable, git-friendly, local-first, and usable by any agent that can read files and run shell commands.
 
 ## Installation
 
@@ -79,7 +46,7 @@ Build from source:
 ```bash
 git clone https://github.com/kfcafe/mana
 cd mana
-cargo build --release
+cargo build --release -p mana-cli
 cp target/release/mana ~/.local/bin/
 ```
 
@@ -105,21 +72,58 @@ mana next
 mana show 1
 ```
 
-Run the task with an agent runtime:
+Work the task manually or hand it to an agent:
 
 ```bash
-imp run 1
-```
-
-Verify and close manually:
-
-```bash
+mana claim 1
+# make changes
 mana verify 1
 mana close 1
 ```
 
+If you use an agent runtime, configure it once and dispatch through mana:
+
+```bash
+mana config set-project run "imp run {id}"
+mana run 1
+```
+
 > [!TIP]
 > Prefer targeted verify commands. `cargo test parser::handles_unicode` is usually a better task gate than a broad project-wide test suite.
+
+## Core concepts
+
+### Task
+
+A task is one executable unit of work. It should have a concrete goal, useful context, relevant paths, and a verify command that exits `0` when the task is complete.
+
+```bash
+mana create "Fix login redirect" \
+  --verify "cargo test auth::redirect" \
+  --paths "crates/app/src/auth.rs,crates/app/tests/auth.rs"
+```
+
+### Epic
+
+An epic is a non-dispatchable parent for larger work. Use epics for features, migrations, audits, and refactors that need decomposition before execution.
+
+```bash
+mana create "Improve onboarding flow" --epic
+mana create "Add empty-state copy" --parent 1 --verify "cargo test onboarding_empty_state"
+```
+
+### Fact
+
+A fact is verified project knowledge. Facts are useful for architecture notes, environment requirements, and constraints that agents should not rediscover repeatedly.
+
+```bash
+mana fact "Tests require Docker" --verify "docker info >/dev/null 2>&1" --ttl 90
+mana verify-facts
+```
+
+### Verify gate
+
+A verify gate is a shell command attached to a task. `mana close <id>` runs the command before closing the task. If it fails, the task stays open and the failure is recorded for the next attempt.
 
 ## How it works
 
@@ -167,20 +171,14 @@ The normal loop is:
 
 ## Working with agents
 
-Mana is agent-agnostic. The recommended boundary is to let an agent runtime execute a single mana task:
+Mana is agent-agnostic. Any runtime can work from mana as long as it can read files and run commands.
 
-```bash
-mana run <unit-id>
-```
-
-You can also configure command templates for compatible runtimes:
+Configure command templates with `{id}` placeholders:
 
 ```bash
 mana config set-project run "imp run {id}"
 mana config set-project plan "imp plan {id}"
 ```
-
-`{id}` is replaced with the unit ID.
 
 Useful commands while agents are working:
 
@@ -190,6 +188,8 @@ mana logs 3      # logs for unit 3
 mana status      # claimed, ready, blocked, and grouped work
 mana context 3   # agent briefing for a unit
 ```
+
+`mana context <id>` is the agent handoff surface. It assembles the unit spec, prior attempts, dependencies, project rules, and relevant files into one briefing.
 
 ## Planning and decomposition
 
@@ -351,16 +351,17 @@ The MCP surface exposes project status, unit context, tree views, and common uni
 cargo check --workspace --all-targets
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --check
 ```
 
 The workspace contains:
 
-- `crates/mana-core` — durable model, operations, config, index, graph, verification
-- `crates/mana-cli` — CLI commands, output, MCP server, runtime adapters
+- `crates/mana-core` - durable model, operations, config, index, graph, verification
+- `crates/mana-cli` - CLI commands, output, MCP server, runtime adapters
 
 ## Documentation
 
-- `mana --help` — command groups and examples
-- `mana <command> --help` — detailed command help
-- `CONTRIBUTING.md` — contribution workflow
-- `CHANGELOG.md` — release history
+- `mana --help` - command groups and examples
+- `mana <command> --help` - detailed command help
+- `CONTRIBUTING.md` - contribution workflow
+- `CHANGELOG.md` - release history
