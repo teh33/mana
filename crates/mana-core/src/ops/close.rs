@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -515,15 +516,6 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
 
     // 3. Worktree merge (after verify passes, before archiving)
     let worktree_info = detect_valid_worktree(project_root);
-    if let Some(ref wt_info) = worktree_info {
-        match handle_worktree_merge(wt_info, &unit)? {
-            WorktreeMergeStatus::Merged => {}
-            WorktreeMergeStatus::Conflict { files } => {
-                return Ok(CloseOutcome::MergeConflict { files, warnings });
-            }
-        }
-    }
-
     // 4. Feature gate — delegate to caller
     if unit.feature {
         use std::io::IsTerminal;
@@ -585,13 +577,6 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
         run_post_close_actions(&unit, project_root, opts.reason.as_deref(), config.as_ref());
     warnings.extend(post_close.warnings);
 
-    // Clean up worktree after successful close
-    if let Some(ref wt_info) = worktree_info {
-        if let Some(warning) = cleanup_worktree(wt_info) {
-            warnings.push(warning);
-        }
-    }
-
     // 8. Auto-close parents
     let auto_closed_parents = if mana_dir.exists() {
         if let Some(parent_id) = &unit.parent {
@@ -612,6 +597,31 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
     // index updates are included in the close commit.
     rebuild_index(mana_dir)?;
 
+    let close_commit_target_paths = close_commit_target_paths(
+        project_root,
+        mana_dir,
+        &unit,
+        &unit_path,
+        &archive_path,
+        &auto_closed_parents,
+    );
+
+    if let Some(ref wt_info) = worktree_info {
+        match handle_worktree_merge(wt_info, &unit, &close_commit_target_paths)? {
+            WorktreeMergeStatus::Merged => {}
+            WorktreeMergeStatus::Conflict { files } => {
+                return Ok(CloseOutcome::MergeConflict { files, warnings });
+            }
+        }
+    }
+
+    // Clean up worktree after successful close
+    if let Some(ref wt_info) = worktree_info {
+        if let Some(warning) = cleanup_worktree(wt_info) {
+            warnings.push(warning);
+        }
+    }
+
     // Auto-commit if configured (skip in worktree mode — it already commits)
     let auto_commit_result = if worktree_info.is_none() {
         let auto_commit_enabled = config.as_ref().map(|c| c.auto_commit).unwrap_or(false);
@@ -624,6 +634,7 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
                 unit.parent.as_deref(),
                 &unit.labels,
                 template.as_deref(),
+                &close_commit_target_paths,
             ))
         } else {
             None
@@ -1318,6 +1329,7 @@ fn detect_valid_worktree(project_root: &Path) -> Option<crate::worktree::Worktre
 fn handle_worktree_merge(
     wt_info: &crate::worktree::WorktreeInfo,
     unit: &Unit,
+    target_paths: &[String],
 ) -> Result<WorktreeMergeStatus> {
     let message = expand_commit_template(
         DEFAULT_COMMIT_TEMPLATE,
@@ -1326,7 +1338,7 @@ fn handle_worktree_merge(
         unit.parent.as_deref(),
         &unit.labels,
     );
-    crate::worktree::commit_worktree_changes(&wt_info.worktree_path, &message)?;
+    crate::worktree::commit_worktree_paths(&wt_info.worktree_path, &message, target_paths)?;
 
     match crate::worktree::merge_to_main(wt_info, &unit.id)? {
         crate::worktree::MergeResult::Success | crate::worktree::MergeResult::NothingToCommit => {
@@ -1364,6 +1376,80 @@ fn expand_commit_template(
         .replace("{labels}", &labels.join(","))
 }
 
+fn relative_git_path(project_root: &Path, path: &Path) -> Option<String> {
+    let relative = path.strip_prefix(project_root).ok()?;
+    Some(relative.to_string_lossy().replace('\\', "/"))
+}
+
+fn add_target_path(targets: &mut BTreeSet<String>, project_root: &Path, path: &Path) {
+    if let Some(relative) = relative_git_path(project_root, path) {
+        if !relative.is_empty() {
+            targets.insert(relative);
+        }
+    }
+}
+
+fn git_path_tracked(project_root: &Path, relative_path: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("ls-files")
+        .arg("--error-unmatch")
+        .arg("--")
+        .arg(relative_path)
+        .current_dir(project_root)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn add_tracked_or_existing_target_path(
+    targets: &mut BTreeSet<String>,
+    project_root: &Path,
+    path: &Path,
+) {
+    if let Some(relative) = relative_git_path(project_root, path) {
+        if !relative.is_empty() && (path.exists() || git_path_tracked(project_root, &relative)) {
+            targets.insert(relative);
+        }
+    }
+}
+
+fn close_commit_target_paths(
+    project_root: &Path,
+    mana_dir: &Path,
+    unit: &Unit,
+    original_unit_path: &Path,
+    archive_path: &Path,
+    auto_closed_parents: &[String],
+) -> Vec<String> {
+    let mut targets = BTreeSet::new();
+
+    for path in &unit.paths {
+        let path = path.trim();
+        if !path.is_empty() {
+            targets.insert(path.replace('\\', "/"));
+        }
+    }
+
+    add_tracked_or_existing_target_path(&mut targets, project_root, original_unit_path);
+    add_tracked_or_existing_target_path(&mut targets, project_root, archive_path);
+
+    for relative in ["index.yaml", "archive.yaml"] {
+        let path = mana_dir.join(relative);
+        if path.exists() {
+            add_target_path(&mut targets, project_root, &path);
+        }
+    }
+
+    for parent_id in auto_closed_parents {
+        if let Ok(parent_archive_path) = find_archived_unit(mana_dir, parent_id) {
+            add_target_path(&mut targets, project_root, &parent_archive_path);
+        }
+    }
+
+    targets.into_iter().collect()
+}
+
 /// Auto-commit changes on close (non-worktree mode).
 fn auto_commit_on_close(
     project_root: &Path,
@@ -1372,6 +1458,7 @@ fn auto_commit_on_close(
     parent_id: Option<&str>,
     labels: &[String],
     template: Option<&str>,
+    target_paths: &[String],
 ) -> AutoCommitResult {
     let message = expand_commit_template(
         template.unwrap_or(DEFAULT_COMMIT_TEMPLATE),
@@ -1381,21 +1468,34 @@ fn auto_commit_on_close(
         labels,
     );
 
-    let add_status = std::process::Command::new("git")
-        .args(["add", "-A"])
+    if target_paths.is_empty() {
+        return AutoCommitResult {
+            message,
+            committed: false,
+            warning: None,
+        };
+    }
+
+    let add_output = std::process::Command::new("git")
+        .arg("add")
+        .arg("-A")
+        .arg("--")
+        .args(target_paths)
         .current_dir(project_root)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
-        .status();
+        .output();
 
-    match add_status {
-        Ok(status) if !status.success() => {
+    match add_output {
+        Ok(output) if !output.status.success() => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
             return AutoCommitResult {
                 message,
                 committed: false,
                 warning: Some(format!(
-                    "git add -A failed (exit {})",
-                    status.code().unwrap_or(-1)
+                    "git add targeted paths failed (exit {}): {}",
+                    output.status.code().unwrap_or(-1),
+                    stderr.trim()
                 )),
             };
         }
@@ -1403,7 +1503,7 @@ fn auto_commit_on_close(
             return AutoCommitResult {
                 message,
                 committed: false,
-                warning: Some(format!("git add -A failed: {}", e)),
+                warning: Some(format!("git add targeted paths failed: {}", e)),
             };
         }
         _ => {}
@@ -2263,6 +2363,8 @@ mod tests {
             child.parent = Some("1".to_string());
             write_unit(&mana_dir, &child);
 
+            fs::write(project_root.join("unrelated.txt"), "do not commit").unwrap();
+
             let result = close(
                 &mana_dir,
                 "1.1",
@@ -2301,6 +2403,10 @@ mod tests {
             );
             assert!(changed_files.contains("1-parent.md"), "{changed_files}");
             assert!(changed_files.contains("1.1-child.md"), "{changed_files}");
+            assert!(!changed_files.contains("unrelated.txt"), "{changed_files}");
+
+            let status = git_stdout(project_root, &["status", "--short"]);
+            assert!(status.contains("?? unrelated.txt"), "{status}");
         });
     }
 

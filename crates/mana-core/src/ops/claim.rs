@@ -69,8 +69,8 @@ fn run_verify_check(verify_cmd: &str, project_root: &Path) -> Result<bool> {
 /// If the unit has a verify command and `force` is false, the verify command
 /// is run first for fail-first units. If it already passes, the claim is
 /// rejected (nothing to do). The current git HEAD SHA is stored as
-/// `checkpoint` for any claimed unit with a verify command so later review/
-/// diff flows can compare against the attempt baseline.
+/// `checkpoint` for claimed dispatchable tasks so later review/diff/close flows
+/// can compare against the attempt baseline.
 pub fn claim(mana_dir: &Path, id: &str, params: ClaimParams) -> Result<ClaimResult> {
     let unit_path = find_unit_file(mana_dir, id).map_err(|_| anyhow!("Unit not found: {}", id))?;
     let mut unit =
@@ -111,9 +111,11 @@ pub fn claim(mana_dir: &Path, id: &str, params: ClaimParams) -> Result<ClaimResu
         unit.fail_first = true;
     }
 
-    if has_verify {
+    if unit.kind.is_dispatchable_task() {
         unit.checkpoint = git_head_sha(project_root);
+    }
 
+    if has_verify {
         // Freeze the judge: hash the verify command so we can detect changes at close time.
         if let Some(ref verify_cmd) = unit.verify {
             let mut hasher = Sha256::new();
@@ -508,6 +510,47 @@ mod tests {
 
         let result = claim(&bd, "1", strict_params(Some("alice"))).unwrap();
         assert!(result.unit.checkpoint.is_some());
+        assert_eq!(result.unit.status, Status::InProgress);
+    }
+
+    #[test]
+    fn unverified_task_claim_stores_checkpoint_sha_without_verify_hash() {
+        let (_dir, bd) = setup();
+        create::create(&bd, minimal_params("Unverified checkpoint")).unwrap();
+
+        let project_root = bd.parent().unwrap();
+        ShellCommand::new("git")
+            .args(["init"])
+            .current_dir(project_root)
+            .output()
+            .unwrap();
+        ShellCommand::new("git")
+            .args(["commit", "-m", "init", "--allow-empty"])
+            .current_dir(project_root)
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@test.com")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@test.com")
+            .output()
+            .unwrap();
+
+        let result = claim(&bd, "1", strict_params(Some("alice"))).unwrap();
+        let sha = result
+            .unit
+            .checkpoint
+            .expect("claim should store checkpoint");
+        assert_eq!(sha.len(), 40);
+        assert!(sha.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(result.unit.verify_hash.is_none());
+    }
+
+    #[test]
+    fn claim_without_git_repo_leaves_checkpoint_empty() {
+        let (_dir, bd) = setup();
+        create::create(&bd, minimal_params("No git checkpoint")).unwrap();
+
+        let result = claim(&bd, "1", strict_params(Some("alice"))).unwrap();
+        assert!(result.unit.checkpoint.is_none());
         assert_eq!(result.unit.status, Status::InProgress);
     }
 

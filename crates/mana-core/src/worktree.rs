@@ -158,6 +158,39 @@ pub fn detect_worktree(cwd: &std::path::Path) -> Result<Option<WorktreeInfo>> {
     }))
 }
 
+/// Commit the specified paths in the worktree directory.
+///
+/// Runs `git add -A -- <paths>` followed by `git commit -m <message>` in the
+/// given directory. Paths must be relative to the repository root. `-A` is scoped
+/// by the explicit pathspecs so deletions for target paths are recorded without
+/// staging unrelated worktree changes.
+pub fn commit_worktree_paths(
+    cwd: &std::path::Path,
+    message: &str,
+    paths: &[String],
+) -> Result<bool> {
+    if paths.is_empty() {
+        return Ok(false);
+    }
+
+    let add_output = Command::new("git")
+        .arg("add")
+        .arg("-A")
+        .arg("--")
+        .args(paths)
+        .current_dir(cwd)
+        .output()?;
+
+    if !add_output.status.success() {
+        return Err(anyhow!(
+            "git add failed: {}",
+            String::from_utf8_lossy(&add_output.stderr)
+        ));
+    }
+
+    commit_staged_changes(cwd, message)
+}
+
 /// Commit all changes in the specified worktree directory.
 ///
 /// Runs `git add -A` followed by `git commit -m <message>` in the given directory.
@@ -181,6 +214,10 @@ pub fn commit_worktree_changes(cwd: &std::path::Path, message: &str) -> Result<b
         ));
     }
 
+    commit_staged_changes(cwd, message)
+}
+
+fn commit_staged_changes(cwd: &std::path::Path, message: &str) -> Result<bool> {
     // Commit changes
     let commit_output = Command::new("git")
         .args(["commit", "-m", message])
