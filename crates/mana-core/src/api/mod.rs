@@ -697,6 +697,15 @@ pub fn update_unit(
     update::update(mana_dir, id, params)
 }
 
+/// Move a unit under a new parent, or detach it to the root.
+pub fn reparent_unit(
+    mana_dir: &Path,
+    id: &str,
+    params: crate::ops::reparent::ReparentParams,
+) -> Result<crate::ops::reparent::ReparentResult> {
+    crate::ops::reparent::reparent(mana_dir, id, params)
+}
+
 /// Close a unit — run verify, archive, and cascade to parents.
 ///
 /// The full close lifecycle:

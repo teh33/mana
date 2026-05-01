@@ -16,6 +16,7 @@ pub mod mutate;
 pub mod plan;
 pub mod recall;
 pub mod reopen;
+pub mod reparent;
 pub mod run;
 pub mod show;
 pub mod stats;
