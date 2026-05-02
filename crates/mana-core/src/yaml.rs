@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::{anyhow, Result};
 use serde::de::DeserializeOwned;
@@ -15,7 +16,21 @@ fn catch_parser_panic<T, F>(parse: F) -> Result<T>
 where
     F: FnOnce() -> Result<T>,
 {
-    match panic::catch_unwind(AssertUnwindSafe(parse)) {
+    static PANIC_HOOK_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    let hook_guard = PANIC_HOOK_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let previous_hook = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+
+    let result = panic::catch_unwind(AssertUnwindSafe(parse));
+
+    panic::set_hook(previous_hook);
+    drop(hook_guard);
+
+    match result {
         Ok(result) => result,
         Err(payload) => Err(anyhow!(
             "YAML parser panicked{}",
@@ -46,10 +61,7 @@ mod tests {
 
     #[test]
     fn catch_parser_panic_recovers_from_actual_panic() {
-        let previous_hook = std::panic::take_hook();
-        std::panic::set_hook(Box::new(|_| {}));
         let err = catch_parser_panic::<(), _>(|| panic!("boom")).unwrap_err();
-        std::panic::set_hook(previous_hook);
         assert!(err.to_string().contains("YAML parser panicked: boom"));
     }
 }

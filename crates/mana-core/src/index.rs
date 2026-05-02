@@ -309,7 +309,14 @@ impl Index {
             index.save(mana_dir)?;
             Ok(index)
         } else {
-            Self::load(mana_dir)
+            match Self::load(mana_dir) {
+                Ok(index) => Ok(index),
+                Err(_) => {
+                    let index = Self::build(mana_dir)?;
+                    index.save(mana_dir)?;
+                    Ok(index)
+                }
+            }
         }
     }
 
@@ -844,6 +851,17 @@ mod tests {
         // load_or_rebuild should load without rebuilding
         let loaded = Index::load_or_rebuild(&mana_dir).unwrap();
         assert_eq!(original, loaded);
+    }
+
+    #[test]
+    fn load_or_rebuild_rebuilds_when_fresh_cached_index_panics_parser() {
+        let (_dir, mana_dir) = setup_mana_dir();
+
+        Index::build(&mana_dir).unwrap().save(&mana_dir).unwrap();
+        fs::write(mana_dir.join("index.yaml"), "units: *missing_alias\n").unwrap();
+
+        let loaded = Index::load_or_rebuild(&mana_dir).unwrap();
+        assert_eq!(loaded.units.len(), 4);
     }
 
     // -- save / load round-trip --

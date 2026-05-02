@@ -1,111 +1,187 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Mana is pre-1.0, so minor releases may include behavior changes.
+
+Entries before 0.3.1 are best-effort summaries from repository history and release metadata. The changelog is maintained intentionally from 0.3.1 onward.
 
 ## [Unreleased]
 
 ### Added
-- **Batch verify** — `batch_verify: true` config option groups shared verify commands and runs each once after agents complete, instead of each agent running verify independently. Eliminates cargo lock contention and redundant builds when parallel agents share the same verify command (e.g. `cargo build`).
-- New `AwaitingVerify` unit status for runner-mediated verification
-- `mana close --defer-verify` flag and `MANA_BATCH_VERIFY=1` env var for deferred verification
-- `BatchVerify` JSON stream event for programmatic consumers
 
-## [0.3.0] - 2026-03-18
-
-### Added
-- Accept `P0`–`P4` format for `--priority` flag (in addition to numeric)
+### Changed
 
 ### Fixed
-- Verify-on-claim ignoring `--pass-ok` when `fail_first=false`
-
-### Changed
-- Improved `mana run` progress output and updated docs terminology
-- Tightened `chrono` and `regex` version floors above known CVEs
-- README examples diversified beyond auth domain
-- Replaced comparison chart with Spec Kit, GSD, and Ralph loop sections
-
-## [0.2.0] - 2026-03-01
-
-### Added
-- File locking to prevent concurrent agent writes
-- Atomic file writes for crash safety
-- CONTRIBUTING.md
-- **Agent orchestration** — `mana run` dispatches ready units to agents with ready-queue scheduling
-- **Loop mode** — `mana run --loop-mode` continuously dispatches until no work remains
-- **Auto-planning** — `mana run --auto-plan` decomposes large units before dispatch
-- **Adversarial review** — `mana run --review` spawns a second agent to verify correctness
-- **Agent monitoring** — `mana agents` and `mana logs` for observing running agents
-- **Memory system** — `mana fact` for verified project knowledge with TTL and staleness detection
-- **Memory context** — `mana context` (no args) outputs stale facts, in-progress units, recent completions
-- **MCP server** — `mana mcp serve` for IDE integration (Cursor, Windsurf, Claude Desktop, Cline)
-- **Library API** — `lib.rs` module with core type re-exports for use as a Rust crate
-- **Interactive wizard** — `mana create` with no args launches step-by-step prompts (fuzzy parent search, smart verify suggestions, `$EDITOR` for descriptions)
-- **Sequential chaining** — `mana create next` auto-depends on the most recently created unit
-- **Trace command** — `mana trace` walks unit lineage, dependencies, artifacts, and attempt history
-- **Recall command** — `mana recall` searches units by keyword across open and archived units
-- **Pipe-friendly output** — `--json`, `--ids`, `--format` on list/show/verify/context commands
-- **Stdin input** — `--description -`, `--notes -`, `--stdin` for batch operations
-- **Batch close** — `mana close --stdin` reads IDs from stdin
-- **Failure escalation** — `--on-fail "retry:3"` and `--on-fail "escalate:P0"` for verify failures
-- **Config inheritance** — `extends` field for shared config across projects
-- **Shell completions** — `mana completions` for bash, zsh, fish, and PowerShell
-- **Agent presets** — `mana init --agent` with presets for Claude, pi, and aider
-- **File context extraction** — `mana context <id>` extracts files referenced in unit descriptions
-- **Structure-only context** — `mana context --structure-only` for signatures and imports only
-- **Unarchive** — `mana unarchive` restores archived units
-- **Lock management** — `mana locks` views and clears file locks
-- **Quick create** — `mana quick` creates and claims a unit in one step
-- **Status overview** — `mana status` shows claimed, ready, and blocked units
-- **Context command** — `mana context` assembles file context from unit descriptions
-- **Edit command** — `mana edit` opens units in `$EDITOR` with schema validation and backup/rollback
-- **Hook system** — pre-close hooks with `mana trust` for managing hook execution
-- **Smart selectors** — `@latest`, `@blocked`, `@parent`, `@me` resolve to unit IDs dynamically
-- **Verify-as-spec** — units without a verify command are treated as goals, not tasks
-- **Auto-suggest verify** — detects project type (Cargo.toml, package.json) and suggests verify commands
-- **Fail-first enforcement** — verify must fail on create (on by default), `--pass-ok` to skip
-- **Agent liveness** — `mana status` shows whether claimed units have active agents
-- **Better failure feedback** — verify failures show actionable output
-- **Acceptance criteria** — `--acceptance` field for human-readable done conditions
-- **Core CLI** — `mana init`, `mana create`, `mana show`, `mana list`, `mana close`
-- **Verification gates** — every unit has a verify command that must pass to close
-- **Hierarchical tasks** — dot notation (`3.1` is a child of `3`), `mana tree` for visualization
-- **Smart dependencies** — `produces`/`requires` fields with auto-inference and cycle detection
-- **Dependency graph** — `mana graph` with ASCII, Mermaid, and DOT output
-- **Task lifecycle** — `mana claim`, `mana close`, `mana reopen`, `mana delete`
-- **Failure tracking** — attempts counter, failure output appended to unit notes
-- **Ready/blocked queries** — `mana ready` and `mana blocked` filter by dependency state
-- **Dependency management** — `mana dep add/remove/list/tree/cycles`
-- **Index engine** — cached index with `mana sync` for rebuild and `mana doctor` for health checks
-- **Project stats** — `mana stats` for unit counts and status breakdown
-- **Tidy command** — `mana tidy` archives closed units, releases stale claims, rebuilds index
-- **Markdown format** — units stored as `.md` files with YAML frontmatter
-- **Slug-based filenames** — `{id}-{slug}.md` naming convention
-- **Archive system** — closed units auto-archive to `.mana/archive/YYYY/MM/`
-- **Git-native** — all state in `.mana/` directory, clean diffs, works offline
-
-### Changed
-- Improved robustness for parallel agent workflows
-- Package renamed from `bn` to `mana-cli` for crates.io publication
-- Improved help text and README for all current commands
-- Improved `mana show` rendering with better formatting
-- README rewritten with table of contents and consolidated documentation
 
 ### Removed
-- `mana ready` — use `mana status` (shows ready units in the Ready section, `--json` for scripting)
-- `mana blocked` — use `mana status` (shows blocked units in the Blocked section)
-- `mana dep tree` — use `mana graph` (richer output with ASCII, Mermaid, DOT formats)
-- `mana dep cycles` — use `mana doctor` (runs cycle detection among other health checks)
+
+## [0.3.1] - 2026-04-27
+
+### Added
+
+- Published `mana-pool` as the support crate for resource-aware run orchestration.
+- Added SQLite-backed mana indexing and integrated it into context assembly.
+- Added SQLite diagnostics to `mana doctor`.
+- Added `mana search`.
+
+### Changed
+
+- Rewrote the README for crates.io and first-time users.
+- Updated mana help positioning.
+- Refreshed dependency lockfile.
+- Aligned published crate versions so `mana-cli` depends on `mana-core 0.3.1`.
+- Moved direct-mode deferred grouped verify ownership through `mana-pool::execute_deferred_verify`.
+- Normalized mana graph/index data after migration into the repository.
 
 ### Fixed
-- `mana context` crash on corrupt archive YAML
-- Missing `rules_file` and `memory` fields in test struct literals
-- Shell escaping in verify commands
-- File extension preservation during archiving
-- `.md` format support in dep and verify commands
 
-[Unreleased]: https://github.com/kfcafe/mana/compare/v0.3.0...HEAD
+- Fixed clippy failures on current stable Rust.
+- Fixed default mana unit kind handling.
+- Fixed migrated mana verify commands.
+- Hardened mana parsing against libyml scanner panics in corrupt YAML paths.
+- Fixed MCP close verify formatting.
+
+### Removed
+
+- Removed `mana-review` from the active workspace and archived the code locally outside the tracked tree.
+- Removed the human review UI module from the active CLI build.
+
+## [0.3.0] - 2026-03-23
+
+### Added
+
+- Initial crates.io publication of `mana-cli`.
+- Added `mana-pool` crate as a resource-aware dispatch engine for agent runs.
+- Added `mana-review` crate and wired review queue, HTML review, approve/reject/request-changes flows into the CLI.
+- Added native mana tool surfaces for imp, including create, close, update, orchestration actions, and run state.
+- Added worktree isolation for parallel agents.
+- Added feature-aware task creation with `--feature` and parent auto-close gating.
+- Added smart wave dispatching and file-conflict avoidance in the ready queue.
+- Added critical-path weighting and prioritization.
+- Added `mana diff` to show changes produced by an agent.
+- Added verify-command static analysis to `mana create`.
+- Added decision fields as an execution gate.
+- Added auto-JSON behavior when stdout is piped.
+- Enriched list JSON with verify and creation metadata.
+- Extracted close lifecycle logic into `mana-core` operations.
+- Added retry context to the spawner trait.
+- Added global and project-scoped config commands with effective-value output.
+- Added progress events from running agents.
+- Added release CI workflows for mana.
+- Added a hardened verification pipeline with verify freeze, diff evidence, and risk scoring.
+
+### Changed
+
+- Renamed the project/package lineage from `bn` toward `mana-cli` for publication.
+- Cleaned up CLI shape by merging several commands into flags.
+- Renamed `mana show` toward `mana read`, while retaining compatibility aliases.
+- Improved `mana plan` by removing dead code and sharpening the decomposition prompt.
+- Improved model config discoverability.
+- Improved README and package metadata for publication.
+- Suppressed child stdio during embedded JSON runs.
+- Updated runtime handoff semantics so mana run can integrate with imp-run style workers.
+
+### Fixed
+
+- Fixed CI failures from absolute local path dependencies and compile errors.
+- Fixed flaky plan tests by forcing index rebuilds.
+- Fixed project detection compatibility with `project-detect 0.1`.
+- Fixed claim release on spawned-agent failure.
+- Fixed archived dependencies so archived units can satisfy dependency checks.
+- Fixed frontmatter handling bugs.
+- Fixed close test isolation.
+- Fixed release CI cross-compilation for macOS x86_64 from arm64 runners.
+- Fixed read-tool hang and file suggestion performance issues.
+- Fixed UTF-8 panic behavior in streaming tool output.
+
+### Removed
+
+- Removed promptfoo installation while retaining evaluation scaffolding for later.
+
+## [0.2.0] - 2026-03-18
+
+### Added
+
+- File locking to prevent concurrent agent writes.
+- Atomic file writes for crash safety.
+- `CONTRIBUTING.md`.
+- Agent orchestration through `mana run` with ready-queue scheduling.
+- Loop mode for continuously dispatching until no work remains.
+- Auto-planning for decomposing large units before dispatch.
+- Adversarial review support for agent-produced work.
+- Agent monitoring through `mana agents` and `mana logs`.
+- Verified project memory through `mana fact`, TTLs, and stale fact detection.
+- Memory context output through `mana context` without arguments.
+- MCP server support through `mana mcp serve`.
+- Library API re-exports for Rust consumers.
+- Interactive `mana create` wizard.
+- Sequential chaining through `mana create next`.
+- `mana trace` for lineage, dependencies, artifacts, and attempt history.
+- `mana recall` keyword search across open and archived units.
+- Pipe-friendly output: `--json`, `--ids`, and `--format`.
+- Stdin support for descriptions, notes, and batch operations.
+- Batch close through `mana close --stdin`.
+- Failure escalation policies through `--on-fail`.
+- Config inheritance through `extends`.
+- Shell completions.
+- Agent presets for initialization.
+- File context extraction and structure-only context.
+- `mana unarchive`.
+- Lock management through `mana locks`.
+- `mana quick` for create-and-claim workflows.
+- Status overview for claimed, ready, and blocked units.
+- `$EDITOR`-based editing with schema validation and backup/rollback.
+- Hook system with trust management.
+- Smart selectors such as `@latest`, `@blocked`, `@parent`, and `@me`.
+- Verify-as-spec behavior for goal-like units without verify commands.
+- Auto-suggested verify commands from project type detection.
+- Fail-first enforcement on task creation, with `--pass-ok` opt-out.
+- Agent liveness reporting in status output.
+- Acceptance criteria fields.
+- Core CLI commands: `init`, `create`, `show`, `list`, and `close`.
+- Verification gates for closing work.
+- Hierarchical dot-notation tasks and tree rendering.
+- Smart dependencies with `produces`/`requires` fields.
+- Dependency graph output in ASCII, Mermaid, and DOT formats.
+- Task lifecycle commands: `claim`, `close`, `reopen`, and `delete`.
+- Failure tracking with attempts and appended failure output.
+- Ready and blocked dependency queries.
+- Dependency management commands.
+- Cached index and `mana doctor` health checks.
+- Project stats and `mana tidy` maintenance.
+- Markdown/YAML-backed unit storage, slug filenames, archive layout, and git-native local state.
+
+### Changed
+
+- Improved robustness for parallel agent workflows.
+- Renamed the package from `bn` to `mana-cli` for crates.io publication.
+- Improved help text and README coverage.
+- Improved `mana show` rendering.
+- Rewrote README with a table of contents and consolidated documentation.
+- Tightened selected dependency floors above known CVEs.
+
+### Fixed
+
+- Fixed `mana context` crash on corrupt archive YAML.
+- Fixed missing config fields in test struct literals.
+- Fixed shell escaping in verify commands.
+- Fixed file extension preservation during archiving.
+- Fixed `.md` format support in dependency and verify commands.
+- Fixed verify-on-claim behavior with `--pass-ok` and `fail_first=false`.
+
+### Removed
+
+- Removed `mana ready`; use `mana status` instead.
+- Removed `mana blocked`; use `mana status` instead.
+- Removed `mana dep tree`; use `mana graph` instead.
+- Removed `mana dep cycles`; use `mana doctor` instead.
+
+## Earlier internal history
+
+Before the public `0.2.0`/`0.3.0` line, mana evolved through local/internal iterations that established the core model: local Markdown units, verification gates, hierarchical work, dependency tracking, archive behavior, project memory, agent context assembly, and git-friendly state.
+
+[Unreleased]: https://github.com/kfcafe/mana/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/kfcafe/mana/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/kfcafe/mana/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kfcafe/mana/releases/tag/v0.2.0
