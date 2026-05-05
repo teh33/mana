@@ -1,5 +1,6 @@
 pub mod adopt;
 pub mod agents;
+pub mod brief;
 pub mod claim;
 pub mod close;
 pub mod config_cmd;
@@ -46,6 +47,7 @@ pub mod verify;
 
 pub use adopt::cmd_adopt;
 pub use agents::cmd_agents;
+pub use brief::cmd_brief;
 pub use claim::{cmd_claim, cmd_release};
 pub use close::{cmd_close, cmd_close_failed};
 pub use config_cmd::{cmd_config_get, cmd_config_set};

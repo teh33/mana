@@ -39,6 +39,7 @@ Commands:
     status       Show project status: claimed, ready tasks, epics, and blocked units
     next         Recommend the best unit to work on next
     tree         Show hierarchical tree of units
+    brief        Current-truth operational summary for a unit subtree
     context      Output context for a task, epic, or memory (no args)
     search       Search the mana system for a unit ID
 
@@ -77,6 +78,10 @@ Getting started:
 See 'mana <command> --help' for details and examples."
 )]
 pub struct Cli {
+    /// Use the outermost ancestor .mana instead of the nearest project .mana
+    #[arg(long, global = true)]
+    pub root: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -532,6 +537,26 @@ Examples:
         count: usize,
 
         /// JSON output
+        #[arg(long)]
+        json: bool,
+
+        /// Force human-readable output even when piped
+        #[arg(long = "no-json", conflicts_with = "json")]
+        no_json: bool,
+    },
+
+    /// Current-truth operational summary for a unit subtree
+    #[command(
+        display_order = 22,
+        after_help = "\
+Examples:
+  mana brief 335       Summarize current truth for unit 335 and descendants"
+    )]
+    Brief {
+        /// Root unit ID to summarize
+        id: String,
+
+        /// Output as JSON
         #[arg(long)]
         json: bool,
 

@@ -2,16 +2,15 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::blocking::{check_blocked_with_archive, check_scope_warning, ScopeWarning};
+use crate::blocking::ScopeWarning;
 use crate::config::Config;
-use crate::index::{ArchiveIndex, Index, IndexEntry};
+use crate::index::Index;
 use crate::stream::{self, StreamEvent};
-use crate::unit::{AttemptOutcome, AutonomyBlockerCode, Status};
+use crate::unit::AutonomyBlockerCode;
 
-use mana_core::ops::run::blocked_unit_for_unresolved_decisions;
+use mana_core::ops::run::{self as core_run, RunTarget as CoreRunTarget};
 use mana_pool::RetryContext;
 
-use super::ready_queue::all_deps_closed;
 use super::wave::{
     compute_critical_path, compute_downstream_weights, compute_effective_parallelism,
     compute_file_conflicts, compute_waves, Wave,
@@ -62,53 +61,33 @@ pub struct DispatchPlan {
     pub index: Index,
 }
 
-fn parent_id_for(index: &Index, unit_id: &str) -> Option<String> {
-    index
-        .units
-        .iter()
-        .find(|entry| entry.id == unit_id)
-        .and_then(|entry| entry.parent.clone())
-}
-
-fn is_descendant_of(index: &Index, unit_id: &str, ancestor_id: &str) -> bool {
-    let mut current = parent_id_for(index, unit_id);
-
-    while let Some(parent_id) = current {
-        if parent_id == ancestor_id {
-            return true;
-        }
-        current = parent_id_for(index, &parent_id);
-    }
-
-    false
-}
-
-fn has_open_descendants(index: &Index, unit_id: &str) -> bool {
-    index
-        .units
-        .iter()
-        .any(|entry| entry.status != Status::Closed && is_descendant_of(index, &entry.id, unit_id))
-}
-
-fn matches_target(index: &Index, entry: &IndexEntry, target: &RunTarget) -> bool {
+fn to_core_target(target: &RunTarget) -> CoreRunTarget {
     match target {
-        RunTarget::AllReady => true,
-        RunTarget::Unit(filter_id) => {
-            let target_has_open_descendants = index.units.iter().any(|candidate| {
-                candidate.status != Status::Closed
-                    && is_descendant_of(index, &candidate.id, filter_id)
-            });
+        RunTarget::AllReady => CoreRunTarget::AllReady,
+        RunTarget::Unit(id) => CoreRunTarget::Unit(id.clone()),
+        RunTarget::Explicit(ids) => CoreRunTarget::Explicit(ids.clone()),
+    }
+}
 
-            if target_has_open_descendants {
-                is_descendant_of(index, &entry.id, filter_id)
-                    && !has_open_descendants(index, &entry.id)
-            } else {
-                entry.id == *filter_id
-            }
-        }
-        RunTarget::Explicit(ids) => ids
-            .iter()
-            .any(|id| matches_target(index, entry, &RunTarget::Unit(id.clone()))),
+fn from_core_unit(unit: core_run::ReadyUnit) -> SizedUnit {
+    SizedUnit {
+        id: unit.id,
+        title: unit.title,
+        action: UnitAction::Implement,
+        priority: unit.priority,
+        dependencies: unit.dependencies,
+        parent: unit.parent,
+        produces: unit.produces,
+        requires: unit.requires,
+        paths: unit.paths,
+        verify_fast: unit.verify_fast,
+        verify_command: unit.verify_command,
+        retry: RetryContext {
+            attempt_number: unit.retry.attempt_number,
+            previous_failure: unit.retry.previous_failure,
+            previous_notes: unit.retry.previous_notes,
+        },
+        model: unit.model,
     }
 }
 
@@ -133,109 +112,43 @@ pub(super) fn plan_dispatch_with_decision_override(
     simulate: bool,
     allow_unresolved_decisions: bool,
 ) -> Result<DispatchPlan> {
-    let index = Index::load_or_rebuild(mana_dir)?;
-    let archive = ArchiveIndex::load_or_rebuild(mana_dir)
-        .unwrap_or_else(|_| ArchiveIndex { units: Vec::new() });
-
-    // Get candidate units: open with verify.
-    // In simulate mode (dry-run), include all open units with verify — even those
-    // whose deps aren't met yet — so compute_waves can show the full execution plan.
-    // In normal mode, only include units whose deps are already closed.
-    let mut candidate_entries: Vec<&IndexEntry> = index
-        .units
-        .iter()
-        .filter(|e| {
-            e.has_verify
-                && e.status == Status::Open
-                && (simulate || all_deps_closed(e, &index, &archive))
+    let core_target = to_core_target(target);
+    let core_plan = core_run::compute_run_plan(mana_dir, &core_target, simulate)?;
+    let mut dispatch_units: Vec<SizedUnit> = core_plan
+        .waves
+        .into_iter()
+        .flat_map(|wave| wave.units.into_iter().map(from_core_unit))
+        .collect();
+    let skipped: Vec<BlockedUnit> = core_plan
+        .blocked
+        .into_iter()
+        .filter(|blocked| allow_unresolved_decisions || blocked.blocker.is_none())
+        .map(|blocked| BlockedUnit {
+            id: blocked.id,
+            title: blocked.title,
+            reason: blocked.reason,
+            blocker: blocked.blocker,
+            decisions: blocked.decisions,
         })
         .collect();
+    let warnings: Vec<(String, ScopeWarning)> = core_plan
+        .warnings
+        .into_iter()
+        .map(|warning| (warning.id, warning.warning))
+        .collect();
+    let index = Index::load_or_rebuild(mana_dir)?;
 
-    // Exclude units that have open descendant units — they're parent/feature
-    // containers and shouldn't be dispatched while children are still pending.
-    candidate_entries.retain(|entry| !has_open_descendants(&index, &entry.id));
-
-    // Filter by target if provided
-    if !matches!(target, RunTarget::AllReady) {
-        candidate_entries.retain(|entry| matches_target(&index, entry, target));
-    }
-
-    // Partition into dispatchable vs blocked.
-    // In simulate mode, skip blocking checks — we want to show the full plan.
-    // In normal mode, dependency blocking is already handled by all_deps_closed above,
-    // but check_blocked catches edge cases (e.g., missing deps not in index).
-    // Scope warnings (oversized) are non-blocking — units dispatch with a warning.
-    let mut dispatch_units: Vec<SizedUnit> = Vec::new();
-    let mut skipped: Vec<BlockedUnit> = Vec::new();
-    let mut warnings: Vec<(String, ScopeWarning)> = Vec::new();
-
-    for entry in &candidate_entries {
-        let unit_path = crate::discovery::find_unit_file(mana_dir, &entry.id)?;
-        let unit = crate::unit::Unit::from_file(&unit_path)?;
-
-        if !simulate {
-            if let Some(blocked) = blocked_unit_for_unresolved_decisions(entry, &unit) {
-                if allow_unresolved_decisions {
-                    // Keep the canonical blocker in the default planner state,
-                    // but let the CLI explicitly override it after confirmation.
-                } else {
-                    skipped.push(BlockedUnit {
-                        id: blocked.id,
-                        title: blocked.title,
-                        reason: blocked.reason,
-                        blocker: blocked.blocker,
-                        decisions: blocked.decisions,
-                    });
-                    continue;
-                }
-            }
-
-            if let Some(reason) = check_blocked_with_archive(entry, &index, Some(&archive)) {
-                skipped.push(BlockedUnit {
-                    id: entry.id.clone(),
-                    title: entry.title.clone(),
-                    reason: reason.to_string(),
-                    blocker: None,
-                    decisions: Vec::new(),
-                });
-                continue;
-            }
-        }
-        // Check for scope warnings (non-blocking)
-        if let Some(warning) = check_scope_warning(entry) {
-            warnings.push((entry.id.clone(), warning));
-        }
-
-        let retry = RetryContext {
-            attempt_number: unit.attempts,
-            previous_failure: unit.attempt_log.iter().rev().find_map(|attempt| {
-                match attempt.outcome {
-                    AttemptOutcome::Failed | AttemptOutcome::Abandoned => attempt.notes.clone(),
-                    AttemptOutcome::Success => None,
-                }
-            }),
-            previous_notes: unit
-                .attempt_log
-                .iter()
-                .filter_map(|attempt| attempt.notes.clone())
-                .collect(),
-        };
-
-        dispatch_units.push(SizedUnit {
-            id: entry.id.clone(),
-            title: entry.title.clone(),
-            action: UnitAction::Implement,
-            priority: entry.priority,
-            dependencies: entry.dependencies.clone(),
-            parent: entry.parent.clone(),
-            produces: entry.produces.clone(),
-            requires: entry.requires.clone(),
-            paths: entry.paths.clone(),
-            verify_fast: unit.verify_fast.clone(),
-            verify_command: unit.verify.clone(),
-            retry,
-            model: unit.model.clone(),
-        });
+    if allow_unresolved_decisions && !simulate {
+        let override_plan = core_run::compute_run_plan(mana_dir, &core_target, true)?;
+        let existing: std::collections::HashSet<String> =
+            dispatch_units.iter().map(|unit| unit.id.clone()).collect();
+        dispatch_units.extend(
+            override_plan
+                .waves
+                .into_iter()
+                .flat_map(|wave| wave.units.into_iter().map(from_core_unit))
+                .filter(|unit| !existing.contains(&unit.id)),
+        );
     }
 
     let waves = compute_waves(&dispatch_units, &index);

@@ -551,6 +551,7 @@ fn run_wave_direct(
                     timeout_min,
                     idle_min,
                     config_run_model.as_deref(),
+                    None,
                     json_stream,
                     file_locking,
                     false, // batch_verify not used in template/wave mode

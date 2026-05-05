@@ -10,6 +10,7 @@ use chrono::Utc;
 use serde_json::{json, Value};
 
 use crate::blocking::check_blocked;
+use crate::commands::brief::render_brief;
 use crate::config::Config;
 use crate::discovery::find_unit_file;
 use crate::index::{Index, IndexEntry};
@@ -184,6 +185,20 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: "brief".to_string(),
+            description: "Current-truth operational summary for a unit subtree".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Root unit ID to summarize"
+                    }
+                },
+                "required": ["id"]
+            }),
+        },
+        ToolDefinition {
             name: "tree".to_string(),
             description: "Hierarchical unit tree showing parent-child relationships and status".to_string(),
             input_schema: json!({
@@ -215,6 +230,7 @@ pub fn handle_tool_call(name: &str, args: &Value, mana_dir: &Path) -> Value {
         "verify_unit" => handle_verify_unit(args, mana_dir),
         "context_unit" => handle_context_unit(args, mana_dir),
         "status" => handle_status(mana_dir),
+        "brief" => handle_brief(args, mana_dir),
         "tree" => handle_tree(args, mana_dir),
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     };
@@ -695,6 +711,14 @@ fn handle_status(mana_dir: &Path) -> Result<String> {
         )
     }))
     .context("Failed to serialize status")
+}
+
+fn handle_brief(args: &Value, mana_dir: &Path) -> Result<String> {
+    let id = args
+        .get("id")
+        .and_then(|v| v.as_str())
+        .context("Missing required field: id")?;
+    render_brief(mana_dir, id)
 }
 
 fn handle_tree(args: &Value, mana_dir: &Path) -> Result<String> {

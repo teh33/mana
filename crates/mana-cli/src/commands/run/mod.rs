@@ -55,6 +55,8 @@ pub(super) struct RunConfig {
     pub file_locking: bool,
     /// Config-level model for run/implement (substituted into `{model}` in templates).
     pub run_model: Option<String>,
+    /// Config-level thinking level for direct imp workers.
+    pub run_thinking: Option<String>,
     /// When true, agents defer verify by exiting with AwaitingVerify status.
     /// The runner then records that the unit is candidate-complete and runs each
     /// unique verify command once to advance those units toward full completion.
@@ -120,6 +122,10 @@ pub struct NativeRunParams {
     pub idle_timeout: u32,
     pub json_stream: bool,
     pub review: bool,
+    /// Runtime model inherited by embedded callers for direct workers.
+    pub run_model: Option<String>,
+    /// Runtime thinking level inherited by embedded callers for direct workers.
+    pub run_thinking: Option<String>,
 }
 
 impl From<RunArgs> for NativeRunParams {
@@ -134,6 +140,8 @@ impl From<RunArgs> for NativeRunParams {
             idle_timeout: args.idle_timeout,
             json_stream: args.json_stream,
             review: args.review,
+            run_model: None,
+            run_thinking: None,
         }
     }
 }
@@ -408,6 +416,10 @@ fn shutdown_requested() -> bool {
     SHUTDOWN_REQUESTED.load(Ordering::SeqCst)
 }
 
+pub fn reset_shutdown_requested() {
+    SHUTDOWN_REQUESTED.store(false, Ordering::SeqCst);
+}
+
 /// Install signal handlers for SIGINT and SIGTERM.
 ///
 /// Instead of immediately terminating, the handlers set a flag that's checked
@@ -563,6 +575,11 @@ fn confirm_dispatch_with_decisions(
 
 /// Execute the `mana run` command.
 pub fn cmd_run(mana_dir: &Path, args: RunArgs) -> Result<()> {
+    // Embedded callers run in long-lived host processes. Clear any stale
+    // shutdown request from a previous interrupted run before installing
+    // handlers, otherwise later runs can plan units but refuse to spawn workers.
+    reset_shutdown_requested();
+
     // Install signal handlers for clean shutdown on Ctrl+C / SIGTERM
     install_signal_handlers();
 
@@ -642,7 +659,7 @@ pub fn run_native(mana_dir: &Path, params: NativeRunParams) -> Result<RunView> {
     let events = events.lock().map(|buf| buf.clone()).unwrap_or_default();
     Ok(build_run_view_from_events(
         events,
-        Some(detect_effective_runtime(&config, &spawn_mode)),
+        Some(detect_effective_runtime(&config, &spawn_mode, &params)),
     ))
 }
 
@@ -701,7 +718,7 @@ fn run_once(
             print_plan_json(
                 &plan,
                 &params.target,
-                Some(detect_effective_runtime(config, spawn_mode).into()),
+                Some(detect_effective_runtime(config, spawn_mode, params).into()),
             );
         } else {
             print_plan(&plan, config.run_model.as_deref());
@@ -711,7 +728,12 @@ fn run_once(
                 eprintln!(
                     "Runtime: direct agent={} model={}",
                     agent,
-                    config.run_model.as_deref().unwrap_or("default")
+                    config
+                        .run_model
+                        .as_ref()
+                        .or(params.run_model.as_ref())
+                        .map(String::as_str)
+                        .unwrap_or("default")
                 );
             } else if let SpawnMode::Template { .. } = spawn_mode {
                 eprintln!(
@@ -765,7 +787,7 @@ fn run_once(
             total_units,
             total_rounds: total_waves,
             units: units_info,
-            runtime: Some(detect_effective_runtime(config, spawn_mode).into()),
+            runtime: Some(detect_effective_runtime(config, spawn_mode, params).into()),
         });
     }
 
@@ -775,7 +797,11 @@ fn run_once(
         idle_timeout_minutes: params.idle_timeout,
         json_stream: params.json_stream,
         file_locking: config.file_locking,
-        run_model: config.run_model.clone(),
+        run_model: params
+            .run_model
+            .clone()
+            .or_else(|| config.run_model.clone()),
+        run_thinking: params.run_thinking.clone(),
         batch_verify: config.batch_verify,
         memory_reserve_mb: config.memory_reserve_mb,
     };
@@ -1182,6 +1208,11 @@ pub fn run_with_stream_capture_and_sink(
         }
     }));
 
+    // Embedded callers run in long-lived host processes. Clear any stale
+    // shutdown request from a previous interrupted run before installing
+    // handlers, otherwise later runs can plan units but refuse to spawn workers.
+    reset_shutdown_requested();
+
     // Install signal handlers for clean shutdown on Ctrl+C / SIGTERM
     install_signal_handlers();
 
@@ -1203,6 +1234,8 @@ pub fn run_with_stream_capture_and_sink(
         ..params
     };
 
+    let effective_runtime = detect_effective_runtime(&config, &spawn_mode, &params);
+
     if params.loop_mode {
         run_loop(mana_dir, &config, &params, &spawn_mode)?;
     } else {
@@ -1210,13 +1243,15 @@ pub fn run_with_stream_capture_and_sink(
     }
 
     let events = events.lock().map(|buf| buf.clone()).unwrap_or_default();
-    Ok(build_run_view_from_events(
-        events,
-        Some(detect_effective_runtime(&config, &spawn_mode)),
-    ))
+    Ok(build_run_view_from_events(events, Some(effective_runtime)))
 }
 
-fn detect_effective_runtime(config: &Config, spawn_mode: &SpawnMode) -> RunRuntimeInfo {
+fn detect_effective_runtime(
+    config: &Config,
+    spawn_mode: &SpawnMode,
+    params: &NativeRunParams,
+) -> RunRuntimeInfo {
+    let run_model = params.run_model.as_ref().or(config.run_model.as_ref());
     let direct_agent = match spawn_mode {
         SpawnMode::Direct => ready_queue::detect_direct_agent().map(|agent| match agent {
             ready_queue::DirectAgent::Imp => "imp".to_string(),
@@ -1232,7 +1267,7 @@ fn detect_effective_runtime(config: &Config, spawn_mode: &SpawnMode) -> RunRunti
 
     RunRuntimeInfo {
         direct_agent,
-        model: config.run_model.clone(),
+        model: run_model.cloned(),
     }
 }
 
@@ -1869,6 +1904,7 @@ mod tests {
             json_stream: false,
             file_locking: false,
             run_model: None,
+            run_thinking: None,
             batch_verify: true,
             memory_reserve_mb: 0,
         };

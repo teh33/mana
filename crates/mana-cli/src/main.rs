@@ -29,7 +29,7 @@ use mana::commands::create::CreateArgs;
 use mana::commands::plan::PlanArgs;
 use mana::commands::quick::QuickArgs;
 use mana::commands::{
-    cmd_adopt, cmd_agents, cmd_claim, cmd_close, cmd_config_get, cmd_config_set, cmd_context,
+    cmd_adopt, cmd_agents, cmd_brief, cmd_claim, cmd_close, cmd_config_get, cmd_config_set, cmd_context,
     cmd_create, cmd_delete, cmd_dep_add, cmd_dep_list, cmd_dep_remove, cmd_diff, cmd_doctor,
     cmd_edit, cmd_fact, cmd_graph, cmd_init, cmd_list, cmd_locks, cmd_locks_clear, cmd_logs,
     cmd_mcp_serve, cmd_memory_context, cmd_move_from, cmd_move_to, cmd_mutate, cmd_next,
@@ -38,7 +38,7 @@ use mana::commands::{
     cmd_unarchive, cmd_update, cmd_verify, cmd_verify_facts,
     review::{cmd_review, ReviewArgs},
 };
-use mana::discovery::find_mana_dir;
+use mana::discovery::{find_mana_dir, find_outermost_mana_dir};
 use mana::index::Index;
 use mana::util::validate_unit_id;
 
@@ -110,7 +110,12 @@ fn main() -> Result<()> {
     }
 
     // All other commands need mana_dir
-    let mana_dir = find_mana_dir(&env::current_dir()?)?;
+    let current_dir = env::current_dir()?;
+    let mana_dir = if cli.root {
+        find_outermost_mana_dir(&current_dir)?
+    } else {
+        find_mana_dir(&current_dir)?
+    };
 
     match cli.command {
         Command::Init { .. } => unreachable!(),
@@ -696,6 +701,11 @@ fn main() -> Result<()> {
             no_json,
         } => cmd_next(count, auto_json(json, no_json), &mana_dir),
 
+        Command::Brief { id, json, no_json } => {
+            validate_unit_id(&id)?;
+            let resolved_id = resolve_unit_id(&id, &mana_dir)?;
+            cmd_brief(&mana_dir, &resolved_id, auto_json(json, no_json))
+        }
         Command::Context {
             id,
             json,

@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
@@ -301,6 +302,7 @@ pub(super) fn run_ready_queue_direct(
             let timeout_min = timeout_minutes;
             let idle_min = idle_timeout_minutes;
             let config_run_model = cfg.run_model.clone();
+            let config_run_thinking = cfg.run_thinking.clone();
 
             std::thread::spawn(move || {
                 let result = run_single_direct(
@@ -309,6 +311,7 @@ pub(super) fn run_ready_queue_direct(
                     timeout_min,
                     idle_min,
                     config_run_model.as_deref(),
+                    config_run_thinking.as_deref(),
                     json_stream,
                     file_locking,
                     batch_verify,
@@ -462,17 +465,19 @@ fn build_direct_command(
     agent: DirectAgent,
     prompt_result: &crate::prompt::PromptResult,
     model: Option<&str>,
+    thinking: Option<&str>,
     unit_id: &str,
     mana_dir: &Path,
 ) -> Command {
     match agent {
-        DirectAgent::Imp => build_imp_command(prompt_result, model, unit_id, mana_dir),
+        DirectAgent::Imp => build_imp_command(prompt_result, model, thinking, unit_id, mana_dir),
     }
 }
 
 fn build_imp_command(
     _prompt_result: &crate::prompt::PromptResult,
     model: Option<&str>,
+    thinking: Option<&str>,
     unit_id: &str,
     mana_dir: &Path,
 ) -> Command {
@@ -480,6 +485,9 @@ fn build_imp_command(
 
     if let Some(model) = model {
         cmd.args(["--model", model]);
+    }
+    if let Some(thinking) = thinking {
+        cmd.args(["--thinking", thinking]);
     }
 
     // imp's headless worker mode: `imp --mode json run <unit-id> --mana-dir <path> [--defer-verify]`
@@ -499,6 +507,7 @@ pub(super) fn run_single_direct(
     timeout_minutes: u32,
     idle_timeout_minutes: u32,
     config_run_model: Option<&str>,
+    config_run_thinking: Option<&str>,
     json_stream: bool,
     file_locking: bool,
     batch_verify: bool,
@@ -599,7 +608,14 @@ pub(super) fn run_single_direct(
 
     // Detect the direct-mode agent to use.
     let agent = detect_direct_agent().expect("direct mode requires imp to be available");
-    let mut cmd = build_direct_command(agent, &prompt_result, effective_model, &sb.id, mana_dir);
+    let mut cmd = build_direct_command(
+        agent,
+        &prompt_result,
+        effective_model,
+        config_run_thinking,
+        &sb.id,
+        mana_dir,
+    );
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
@@ -653,6 +669,8 @@ pub(super) fn run_single_direct(
             };
         }
     };
+
+    let stderr_reader = child.stderr.take().map(spawn_stderr_capture);
 
     // Set up timeout config
     let timeout_config = TimeoutConfig {
@@ -758,6 +776,10 @@ pub(super) fn run_single_direct(
 
     let duration = started.elapsed();
 
+    let stderr_tail = stderr_reader
+        .map(|reader| reader.join().unwrap_or_default())
+        .unwrap_or_default();
+
     // Determine success
     let (success, error) = match monitor_result {
         MonitorResult::Completed => {
@@ -766,18 +788,33 @@ pub(super) fn run_single_direct(
                 Ok(status) if status.success() => (true, None),
                 Ok(status) => (
                     false,
-                    Some(format!("Exit code {}", status.code().unwrap_or(-1))),
+                    Some(format_error_with_stderr_tail(
+                        format!("Exit code {}", status.code().unwrap_or(-1)),
+                        &stderr_tail,
+                    )),
                 ),
-                Err(e) => (false, Some(format!("Wait error: {}", e))),
+                Err(e) => (
+                    false,
+                    Some(format_error_with_stderr_tail(
+                        format!("Wait error: {}", e),
+                        &stderr_tail,
+                    )),
+                ),
             }
         }
         MonitorResult::TotalTimeout => (
             false,
-            Some(format!("Total timeout exceeded ({}m)", timeout_minutes)),
+            Some(format_error_with_stderr_tail(
+                format!("Total timeout exceeded ({}m)", timeout_minutes),
+                &stderr_tail,
+            )),
         ),
         MonitorResult::IdleTimeout => (
             false,
-            Some(format!("Idle timeout exceeded ({}m)", idle_timeout_minutes)),
+            Some(format_error_with_stderr_tail(
+                format!("Idle timeout exceeded ({}m)", idle_timeout_minutes),
+                &stderr_tail,
+            )),
         ),
     };
 
@@ -879,6 +916,31 @@ pub(super) fn run_single_direct(
     }
 }
 
+fn spawn_stderr_capture<R: Read + Send + 'static>(
+    mut stderr: R,
+) -> std::thread::JoinHandle<String> {
+    std::thread::spawn(move || {
+        let mut output = String::new();
+        let _ = stderr.read_to_string(&mut output);
+        tail_lines(&output, 40)
+    })
+}
+
+fn format_error_with_stderr_tail(error: String, stderr_tail: &str) -> String {
+    let stderr_tail = stderr_tail.trim();
+    if stderr_tail.is_empty() {
+        error
+    } else {
+        format!("{}\nstderr tail:\n{}", error, stderr_tail)
+    }
+}
+
+fn tail_lines(text: &str, max_lines: usize) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.len().saturating_sub(max_lines);
+    lines[start..].join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -915,13 +977,20 @@ mod tests {
         };
         let mana_dir = Path::new("/tmp/project/.mana");
 
-        let cmd = build_imp_command(&prompt_result, Some("gpt-5.4"), "1.2", mana_dir);
+        let cmd = build_imp_command(
+            &prompt_result,
+            Some("gpt-5.4"),
+            Some("high"),
+            "1.2",
+            mana_dir,
+        );
         let args: Vec<String> = cmd
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
 
         assert!(args.windows(2).any(|w| w == ["--model", "gpt-5.4"]));
+        assert!(args.windows(2).any(|w| w == ["--thinking", "high"]));
         assert!(args.windows(2).any(|w| w == ["--mode", "json"]));
         assert!(args.windows(2).any(|w| w == ["run", "1.2"]));
         assert!(args
@@ -939,13 +1008,14 @@ mod tests {
         };
         let mana_dir = Path::new("/tmp/project/.mana");
 
-        let cmd = build_imp_command(&prompt_result, None, "7", mana_dir);
+        let cmd = build_imp_command(&prompt_result, None, None, "7", mana_dir);
         let args: Vec<String> = cmd
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
 
         assert!(!args.iter().any(|arg| arg == "--model"));
+        assert!(!args.iter().any(|arg| arg == "--thinking"));
         assert!(args.windows(2).any(|w| w == ["run", "7"]));
         assert!(args
             .windows(2)
@@ -977,6 +1047,33 @@ mod tests {
             },
             model: None,
         }
+    }
+
+    #[test]
+    fn worker_startup_failure_error_includes_stderr_tail() {
+        let error = format_error_with_stderr_tail(
+            "Exit code 1".to_string(),
+            "first line\nParseError: Identifier 'result' has already been declared\n    at pdf-reader.ts:208:14\n",
+        );
+
+        assert!(error.contains("Exit code 1"));
+        assert!(error.contains("stderr tail:"));
+        assert!(error.contains("Identifier 'result' has already been declared"));
+        assert!(error.contains("pdf-reader.ts:208:14"));
+    }
+
+    #[test]
+    fn worker_startup_failure_stderr_tail_is_bounded() {
+        let stderr = (0..50)
+            .map(|index| format!("line {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let tail = tail_lines(&stderr, 40);
+
+        assert!(!tail.contains("line 9"));
+        assert!(tail.contains("line 10"));
+        assert!(tail.contains("line 49"));
     }
 
     #[test]

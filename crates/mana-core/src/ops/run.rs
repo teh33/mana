@@ -21,15 +21,72 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::blocking::check_blocked_with_archive;
+use crate::blocking::{check_blocked_with_archive, check_scope_warning, ScopeWarning};
 use crate::discovery::find_unit_file;
 use crate::index::{ArchiveIndex, Index, IndexEntry};
-use crate::unit::{AutonomyBlockerCode, Status, Unit, UnitType};
+use crate::unit::{AttemptOutcome, AutonomyBlockerCode, Status, Unit};
 use crate::util::natural_cmp;
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunTarget {
+    AllReady,
+    Unit(String),
+    Explicit(Vec<String>),
+}
+
+fn parent_id_for(index: &Index, unit_id: &str) -> Option<String> {
+    index
+        .units
+        .iter()
+        .find(|entry| entry.id == unit_id)
+        .and_then(|entry| entry.parent.clone())
+}
+
+fn is_descendant_of(index: &Index, unit_id: &str, ancestor_id: &str) -> bool {
+    let mut current = parent_id_for(index, unit_id);
+
+    while let Some(parent_id) = current {
+        if parent_id == ancestor_id {
+            return true;
+        }
+        current = parent_id_for(index, &parent_id);
+    }
+
+    false
+}
+
+fn has_open_descendants(index: &Index, unit_id: &str) -> bool {
+    index
+        .units
+        .iter()
+        .any(|entry| entry.status != Status::Closed && is_descendant_of(index, &entry.id, unit_id))
+}
+
+fn matches_target(index: &Index, entry: &IndexEntry, target: &RunTarget) -> bool {
+    match target {
+        RunTarget::AllReady => true,
+        RunTarget::Unit(filter_id) => {
+            let target_has_open_descendants = index.units.iter().any(|candidate| {
+                candidate.status != Status::Closed
+                    && is_descendant_of(index, &candidate.id, filter_id)
+            });
+
+            if target_has_open_descendants {
+                is_descendant_of(index, &entry.id, filter_id)
+                    && !has_open_descendants(index, &entry.id)
+            } else {
+                entry.id == *filter_id
+            }
+        }
+        RunTarget::Explicit(ids) => ids
+            .iter()
+            .any(|id| matches_target(index, entry, &RunTarget::Unit(id.clone()))),
+    }
+}
 
 /// A unit that is ready to be dispatched.
 #[derive(Debug, Clone, PartialEq)]
@@ -51,8 +108,29 @@ pub struct ReadyUnit {
     pub dependencies: Vec<String>,
     /// Parent unit ID (for sibling produces/requires resolution).
     pub parent: Option<String>,
+    /// Optional fast verify command to run before the full verify gate.
+    pub verify_fast: Option<String>,
+    /// Deferred verify command for grouped post-agent verification.
+    pub verify_command: Option<String>,
+    /// Retry context derived from prior attempts without depending on pool/runtime crates.
+    pub retry: RunRetryContext,
     /// Per-unit model override from frontmatter.
     pub model: Option<String>,
+}
+
+/// Retry context derived from a unit's attempt history.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunRetryContext {
+    pub attempt_number: u32,
+    pub previous_failure: Option<String>,
+    pub previous_notes: Vec<String>,
+}
+
+/// A non-blocking warning for a unit that will still dispatch.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunScopeWarning {
+    pub id: String,
+    pub warning: ScopeWarning,
 }
 
 /// A unit that was excluded from dispatch.
@@ -73,8 +151,10 @@ pub struct BlockedUnit {
 pub struct ReadyQueue {
     /// Units ready to dispatch, sorted by priority then critical-path weight.
     pub units: Vec<ReadyUnit>,
-    /// Units that are blocked (deps not met, claimed, etc.).
+    /// Units that are blocked by autonomy/scope/dependency guardrails.
     pub blocked: Vec<BlockedUnit>,
+    /// Scope warnings for units that will dispatch.
+    pub warnings: Vec<RunScopeWarning>,
 }
 
 /// A wave of units that can run concurrently (no inter-wave dependencies).
@@ -93,6 +173,8 @@ pub struct RunPlan {
     pub total_units: usize,
     /// Units that cannot be dispatched.
     pub blocked: Vec<BlockedUnit>,
+    /// Scope warnings for units that will dispatch.
+    pub warnings: Vec<RunScopeWarning>,
 }
 
 // ---------------------------------------------------------------------------
@@ -234,6 +316,23 @@ fn sort_units(units: &mut [ReadyUnit], weights: &HashMap<String, u32>) {
     });
 }
 
+fn build_retry_context(unit: &Unit) -> RunRetryContext {
+    RunRetryContext {
+        attempt_number: unit.attempts,
+        previous_failure: unit.attempt_log.iter().rev().find_map(|attempt| {
+            match attempt.outcome {
+                AttemptOutcome::Failed | AttemptOutcome::Abandoned => attempt.notes.clone(),
+                AttemptOutcome::Success => None,
+            }
+        }),
+        previous_notes: unit
+            .attempt_log
+            .iter()
+            .filter_map(|attempt| attempt.notes.clone())
+            .collect(),
+    }
+}
+
 /// Build a `ReadyUnit` from an index entry and the loaded unit file.
 fn build_ready_unit(entry: &IndexEntry, unit: &Unit, weight: u32) -> ReadyUnit {
     ReadyUnit {
@@ -246,6 +345,9 @@ fn build_ready_unit(entry: &IndexEntry, unit: &Unit, weight: u32) -> ReadyUnit {
         requires: entry.requires.clone(),
         dependencies: entry.dependencies.clone(),
         parent: entry.parent.clone(),
+        verify_fast: unit.verify_fast.clone(),
+        verify_command: unit.verify.clone(),
+        retry: build_retry_context(unit),
         model: unit.model.clone(),
     }
 }
@@ -282,37 +384,28 @@ pub fn blocked_unit_for_unresolved_decisions(
 /// even those whose deps are not yet met. This is the dry-run mode.
 pub fn compute_ready_queue(
     mana_dir: &Path,
-    filter_id: Option<&str>,
+    target: &RunTarget,
     simulate: bool,
 ) -> Result<ReadyQueue> {
     let index = Index::load_or_rebuild(mana_dir)?;
     let archive = ArchiveIndex::load_or_rebuild(mana_dir)
         .unwrap_or_else(|_| ArchiveIndex { units: Vec::new() });
 
-    let mut candidates: Vec<&IndexEntry> = index
+    let candidates: Vec<&IndexEntry> = index
         .units
         .iter()
         .filter(|e| {
-            e.kind == UnitType::Task
+            e.kind == crate::unit::UnitType::Task
                 && e.has_verify
                 && e.status == Status::Open
                 && (simulate || all_deps_closed(e, &index, &archive))
+                && !has_open_descendants(&index, &e.id)
+                && matches_target(&index, e, target)
         })
         .collect();
 
-    if let Some(filter_id) = filter_id {
-        let is_parent = index
-            .units
-            .iter()
-            .any(|e| e.parent.as_deref() == Some(filter_id));
-        if is_parent {
-            candidates.retain(|e| e.parent.as_deref() == Some(filter_id));
-        } else {
-            candidates.retain(|e| e.id == filter_id);
-        }
-    }
-
     let mut blocked: Vec<BlockedUnit> = Vec::new();
+    let mut warnings: Vec<RunScopeWarning> = Vec::new();
 
     // Collect dispatchable entries
     let mut entries_and_units: Vec<(&IndexEntry, Unit)> = Vec::new();
@@ -337,6 +430,12 @@ pub fn compute_ready_queue(
                 continue;
             }
         }
+        if let Some(warning) = check_scope_warning(entry) {
+            warnings.push(RunScopeWarning {
+                id: entry.id.clone(),
+                warning,
+            });
+        }
         entries_and_units.push((entry, unit));
     }
 
@@ -355,6 +454,7 @@ pub fn compute_ready_queue(
     Ok(ReadyQueue {
         units: ready_units,
         blocked,
+        warnings,
     })
 }
 
@@ -366,12 +466,13 @@ pub fn compute_ready_queue(
 /// Set `simulate = true` for dry-run mode (includes units whose deps are not yet met).
 pub fn compute_run_plan(
     mana_dir: &Path,
-    filter_id: Option<&str>,
+    target: &RunTarget,
     simulate: bool,
 ) -> Result<RunPlan> {
-    let queue = compute_ready_queue(mana_dir, filter_id, simulate)?;
+    let queue = compute_ready_queue(mana_dir, target, simulate)?;
     let total_units = queue.units.len();
     let blocked = queue.blocked;
+    let warnings = queue.warnings;
 
     let waves = group_into_waves(queue.units);
 
@@ -379,6 +480,7 @@ pub fn compute_run_plan(
         waves,
         total_units,
         blocked,
+        warnings,
     })
 }
 
@@ -429,6 +531,7 @@ fn group_into_waves(units: Vec<ReadyUnit>) -> Vec<RunWave> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::unit::UnitType;
     use std::collections::HashSet;
 
     fn make_unit(id: &str, deps: Vec<&str>, produces: Vec<&str>, requires: Vec<&str>) -> ReadyUnit {
@@ -442,6 +545,13 @@ mod tests {
             requires: requires.into_iter().map(|s| s.to_string()).collect(),
             dependencies: deps.into_iter().map(|s| s.to_string()).collect(),
             parent: Some("parent".to_string()),
+            verify_fast: None,
+            verify_command: None,
+            retry: RunRetryContext {
+                attempt_number: 0,
+                previous_failure: None,
+                previous_notes: Vec::new(),
+            },
             model: None,
         }
     }
@@ -576,7 +686,7 @@ mod tests {
         unit.to_file(mana_dir.join("2-dispatchable-task-with-unresolved-decisions.md"))
             .unwrap();
 
-        let queue = compute_ready_queue(&mana_dir, None, false).unwrap();
+        let queue = compute_ready_queue(&mana_dir, &RunTarget::AllReady, false).unwrap();
         assert!(queue.units.is_empty());
         assert_eq!(queue.blocked.len(), 1);
         assert_eq!(queue.blocked[0].id, "2");
@@ -593,7 +703,7 @@ mod tests {
             ]
         );
 
-        let simulated = compute_ready_queue(&mana_dir, None, true).unwrap();
+        let simulated = compute_ready_queue(&mana_dir, &RunTarget::AllReady, true).unwrap();
         assert_eq!(simulated.units.len(), 1);
         assert!(simulated.blocked.is_empty());
     }
@@ -648,7 +758,7 @@ mod tests {
         task.to_file(mana_dir.join("2-dispatchable-task.md"))
             .unwrap();
 
-        let queue = compute_ready_queue(&mana_dir, None, false).unwrap();
+        let queue = compute_ready_queue(&mana_dir, &RunTarget::AllReady, false).unwrap();
         assert_eq!(queue.units.len(), 1);
         assert_eq!(queue.units[0].id, "2");
     }

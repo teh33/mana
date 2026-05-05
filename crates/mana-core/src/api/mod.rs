@@ -182,7 +182,10 @@ pub use crate::ops::fact::{FactParams, FactResult, VerifyFactsResult};
 pub use crate::ops::memory_context::{
     memory_context, MemoryContext, RecentWork, RelevantFact, WorkingUnit,
 };
-pub use crate::ops::run::{BlockedUnit, ReadyQueue, ReadyUnit, RunPlan, RunWave};
+pub use crate::ops::run::{
+    BlockedUnit, ReadyQueue, ReadyUnit, RunPlan, RunRetryContext, RunScopeWarning, RunTarget,
+    RunWave,
+};
 pub use crate::ops::stats::StatsResult;
 pub use crate::ops::status::StatusSummary;
 pub use crate::ops::verify::VerifyResult;
@@ -933,7 +936,19 @@ pub fn compute_ready_queue(
     filter_id: Option<&str>,
     simulate: bool,
 ) -> Result<ReadyQueue> {
-    crate::ops::run::compute_ready_queue(mana_dir, filter_id, simulate)
+    let target = filter_id
+        .map(|id| RunTarget::Unit(id.to_string()))
+        .unwrap_or(RunTarget::AllReady);
+    crate::ops::run::compute_ready_queue(mana_dir, &target, simulate)
+}
+
+/// Compute a ready queue for a canonical run target.
+pub fn compute_ready_queue_for_target(
+    mana_dir: &Path,
+    target: &RunTarget,
+    simulate: bool,
+) -> Result<ReadyQueue> {
+    crate::ops::run::compute_ready_queue(mana_dir, target, simulate)
 }
 
 /// Assemble the full agent context for a unit.
