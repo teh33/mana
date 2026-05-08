@@ -41,7 +41,6 @@ use mana::commands::{
 use mana::discovery::{find_mana_dir, find_outermost_mana_dir};
 use mana::index::Index;
 use mana::resolve::resolve_unit;
-use mana::util::validate_unit_id;
 
 // Helper to resolve a single unit ID (handles @latest selector or plain IDs)
 fn resolve_unit_id(id: &str, mana_dir: &std::path::Path) -> Result<String> {
@@ -128,6 +127,7 @@ fn main() -> Result<()> {
                 subcommand,
                 title,
                 set_title,
+                handle,
                 description,
                 acceptance,
                 notes,
@@ -158,6 +158,7 @@ fn main() -> Result<()> {
             if let Some(CreateSubcommand::Next {
                 title,
                 set_title,
+                handle: next_handle,
                 description,
                 acceptance,
                 notes,
@@ -219,6 +220,7 @@ fn main() -> Result<()> {
                     &mana_dir,
                     CreateArgs {
                         title,
+                        handle: next_handle,
                         description,
                         acceptance,
                         notes,
@@ -313,6 +315,7 @@ fn main() -> Result<()> {
                     verify,
                     parent,
                     priority,
+                    handle,
                     labels,
                     assignee,
                     deps,
@@ -346,6 +349,7 @@ fn main() -> Result<()> {
                     &mana_dir,
                     CreateArgs {
                         title,
+                        handle,
                         description,
                         acceptance,
                         notes,
@@ -438,7 +442,6 @@ fn main() -> Result<()> {
         }
 
         Command::Edit { id } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_edit(&mana_dir, &resolved_id)
         }
@@ -484,8 +487,8 @@ fn main() -> Result<()> {
         }
 
         Command::Search { id, json, no_json } => {
-            validate_unit_id(&id)?;
-            cmd_search(&id, &env::current_dir()?, auto_json(json, no_json))
+            let resolved_id = resolve_unit_id(&id, &mana_dir)?;
+            cmd_search(&resolved_id, &env::current_dir()?, auto_json(json, no_json))
         }
 
         Command::Update {
@@ -510,7 +513,6 @@ fn main() -> Result<()> {
             remove_dep,
         } => {
             use mana::commands::stdin::resolve_stdin_opt;
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
 
             // Handle --claim / --release (replaces standalone `mana claim`)
@@ -525,18 +527,20 @@ fn main() -> Result<()> {
 
             // Handle --parent (replaces standalone `mana adopt`)
             if let Some(ref parent_id) = parent {
-                validate_unit_id(parent_id)?;
-                cmd_adopt(&mana_dir, parent_id, std::slice::from_ref(&resolved_id))?;
+                let resolved_parent = resolve_unit_id(parent_id, &mana_dir)?;
+                cmd_adopt(
+                    &mana_dir,
+                    &resolved_parent,
+                    std::slice::from_ref(&resolved_id),
+                )?;
             }
 
             // Handle --add-dep / --remove-dep (replaces standalone `mana dep`)
             if let Some(ref dep_id) = add_dep {
-                validate_unit_id(dep_id)?;
                 let resolved_dep = resolve_unit_id(dep_id, &mana_dir)?;
                 cmd_dep_add(&mana_dir, &resolved_id, &resolved_dep)?;
             }
             if let Some(ref dep_id) = remove_dep {
-                validate_unit_id(dep_id)?;
                 let resolved_dep = resolve_unit_id(dep_id, &mana_dir)?;
                 cmd_dep_remove(&mana_dir, &resolved_id, &resolved_dep)?;
             }
@@ -597,9 +601,6 @@ fn main() -> Result<()> {
             } else {
                 ids
             };
-            for id in &ids {
-                validate_unit_id(id)?;
-            }
             let resolved_ids = resolve_unit_ids(ids, &mana_dir)?;
 
             // --check: run verify without closing (replaces standalone `mana verify`)
@@ -626,7 +627,6 @@ fn main() -> Result<()> {
         Command::Verify {
             id, json, no_json, ..
         } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             let out = mana::output::Output::new();
             let passed = cmd_verify(&mana_dir, &resolved_id, &out)?;
@@ -648,7 +648,6 @@ fn main() -> Result<()> {
             by,
             force,
         } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             if release {
                 cmd_release(&mana_dir, &resolved_id)
@@ -658,34 +657,27 @@ fn main() -> Result<()> {
         }
 
         Command::Reopen { id } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_reopen(&mana_dir, &resolved_id)
         }
 
         Command::Delete { id } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_delete(&mana_dir, &resolved_id)
         }
 
         Command::Dep { command } => match command {
             DepCommand::Add { id, depends_on } => {
-                validate_unit_id(&id)?;
-                validate_unit_id(&depends_on)?;
                 let resolved_id = resolve_unit_id(&id, &mana_dir)?;
                 let resolved_depends_on = resolve_unit_id(&depends_on, &mana_dir)?;
                 cmd_dep_add(&mana_dir, &resolved_id, &resolved_depends_on)
             }
             DepCommand::Remove { id, depends_on } => {
-                validate_unit_id(&id)?;
-                validate_unit_id(&depends_on)?;
                 let resolved_id = resolve_unit_id(&id, &mana_dir)?;
                 let resolved_depends_on = resolve_unit_id(&depends_on, &mana_dir)?;
                 cmd_dep_remove(&mana_dir, &resolved_id, &resolved_depends_on)
             }
             DepCommand::List { id } => {
-                validate_unit_id(&id)?;
                 let resolved_id = resolve_unit_id(&id, &mana_dir)?;
                 cmd_dep_list(&mana_dir, &resolved_id)
             }
@@ -700,7 +692,6 @@ fn main() -> Result<()> {
         } => cmd_next(count, auto_json(json, no_json), &mana_dir),
 
         Command::Brief { id, json, no_json } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_brief(&mana_dir, &resolved_id, auto_json(json, no_json))
         }
@@ -715,7 +706,6 @@ fn main() -> Result<()> {
         } => {
             match id {
                 Some(ref id_str) => {
-                    validate_unit_id(id_str)?;
                     let resolved_id = resolve_unit_id(id_str, &mana_dir)?;
                     cmd_context(
                         &mana_dir,
@@ -735,10 +725,11 @@ fn main() -> Result<()> {
         }
 
         Command::Tree { id } => {
-            if let Some(ref id_val) = id {
-                validate_unit_id(id_val)?;
-            }
-            cmd_tree(&mana_dir, id.as_deref())
+            let resolved_id = id
+                .as_deref()
+                .map(|id_val| resolve_unit_id(id_val, &mana_dir))
+                .transpose()?;
+            cmd_tree(&mana_dir, resolved_id.as_deref())
         }
         Command::Graph { format } => cmd_graph(&mana_dir, &format),
         Command::Sync => cmd_sync(&mana_dir),
@@ -753,7 +744,6 @@ fn main() -> Result<()> {
             json,
             no_json,
         } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_groom(&mana_dir, &resolved_id, dry_run, auto_json(json, no_json))
         }
@@ -764,7 +754,6 @@ fn main() -> Result<()> {
         Command::Trust { revoke, check } => cmd_trust(&mana_dir, revoke, check),
 
         Command::Unarchive { id } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_unarchive(&mana_dir, &resolved_id)
         }
@@ -779,6 +768,7 @@ fn main() -> Result<()> {
 
         Command::Quick {
             title,
+            handle,
             description,
             acceptance,
             notes,
@@ -792,10 +782,12 @@ fn main() -> Result<()> {
             pass_ok,
             verify_timeout,
             force,
+            ..
         } => {
-            if let Some(ref p) = parent {
-                validate_unit_id(p)?;
-            }
+            let parent = parent
+                .as_deref()
+                .map(|p| resolve_unit_id(p, &mana_dir))
+                .transpose()?;
 
             // Parse --on-fail flag
             let on_fail = on_fail
@@ -805,6 +797,7 @@ fn main() -> Result<()> {
             cmd_quick(
                 &mana_dir,
                 QuickArgs {
+                    handle,
                     title,
                     description,
                     acceptance,
@@ -824,21 +817,15 @@ fn main() -> Result<()> {
         }
 
         Command::Move { from, to, ids } => {
-            for id in &ids {
-                validate_unit_id(id)?;
-            }
+            let resolved_ids = resolve_unit_ids(ids, &mana_dir)?;
             match (from, to) {
-                (Some(src), None) => cmd_move_from(&mana_dir, &src, &ids).map(|_| ()),
-                (None, Some(dst)) => cmd_move_to(&mana_dir, &dst, &ids).map(|_| ()),
+                (Some(src), None) => cmd_move_from(&mana_dir, &src, &resolved_ids).map(|_| ()),
+                (None, Some(dst)) => cmd_move_to(&mana_dir, &dst, &resolved_ids).map(|_| ()),
                 _ => unreachable!("clap enforces --from or --to"),
             }
         }
 
         Command::Adopt { parent, children } => {
-            validate_unit_id(&parent)?;
-            for child in &children {
-                validate_unit_id(child)?;
-            }
             let resolved_parent = resolve_unit_id(&parent, &mana_dir)?;
             let resolved_children = resolve_unit_ids(children, &mana_dir)?;
             cmd_adopt(&mana_dir, &resolved_parent, &resolved_children).map(|_| ())
@@ -875,7 +862,6 @@ fn main() -> Result<()> {
             auto,
             dry_run,
         } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_plan(
                 &mana_dir,
@@ -891,7 +877,6 @@ fn main() -> Result<()> {
         Command::Agents { json, no_json } => cmd_agents(&mana_dir, auto_json(json, no_json)),
 
         Command::Logs { id, follow, all } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_logs(&mana_dir, &resolved_id, follow, all)
         }
@@ -955,7 +940,6 @@ fn main() -> Result<()> {
         },
 
         Command::Trace { id, json, no_json } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_trace(&resolved_id, auto_json(json, no_json), &mana_dir)
         }
@@ -966,7 +950,6 @@ fn main() -> Result<()> {
             name_only,
             no_color,
         } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             let output = if stat {
                 mana::commands::diff::DiffOutput::Stat
@@ -986,7 +969,6 @@ fn main() -> Result<()> {
             json,
             no_json,
         } => {
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_mutate(
                 &mana_dir,
@@ -1010,7 +992,6 @@ fn main() -> Result<()> {
             model,
         } => {
             let id = id.ok_or_else(|| anyhow::anyhow!("unit ID required for review"))?;
-            validate_unit_id(&id)?;
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_review(
                 &mana_dir,

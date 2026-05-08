@@ -53,6 +53,7 @@ fn create_claim_without_criteria_shows_error() {
 
     let args = CreateArgs {
         title: "Bad claimed unit".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -96,6 +97,7 @@ fn create_claim_with_acceptance_succeeds() {
 
     let args = CreateArgs {
         title: "Claimed with acceptance".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Feature works".to_string()),
         notes: None,
@@ -130,6 +132,7 @@ fn create_claim_with_verify_succeeds() {
 
     let args = CreateArgs {
         title: "Claimed with verify".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -164,6 +167,7 @@ fn create_without_claim_no_criteria_succeeds() {
 
     let args = CreateArgs {
         title: "Goal unit".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -202,6 +206,7 @@ fn create_claim_with_parent_no_criteria_succeeds() {
     // Create parent first
     let parent_args = CreateArgs {
         title: "Parent".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Children done".to_string()),
         notes: None,
@@ -230,6 +235,7 @@ fn create_claim_with_parent_no_criteria_succeeds() {
     // Create child with --claim but no criteria — exempt because --parent
     let child_args = CreateArgs {
         title: "Child claimed".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,

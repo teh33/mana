@@ -27,6 +27,7 @@ fn git_head_sha(working_dir: &Path) -> Option<String> {
 /// Arguments for quick-create command.
 pub struct QuickArgs {
     pub title: String,
+    pub handle: Option<String>,
     pub description: Option<String>,
     pub acceptance: Option<String>,
     pub notes: Option<String>,
@@ -139,6 +140,8 @@ pub fn cmd_quick(mana_dir: &Path, args: QuickArgs) -> Result<()> {
     let now = Utc::now();
     let mut unit = Unit::new(&unit_id, &args.title);
     unit.slug = Some(slug.clone());
+    unit.handle = args.handle;
+    unit.ensure_handle();
     unit.status = Status::InProgress;
     unit.claimed_by = args.by.clone();
     unit.claimed_at = Some(now);
@@ -319,6 +322,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "Quick task".to_string(),
+            handle: None,
             description: None,
             acceptance: Some("Done".to_string()),
             notes: None,
@@ -355,6 +359,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "Anonymous task".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -385,6 +390,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "Checkpointed task".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -413,6 +419,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "No criteria".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -441,6 +448,7 @@ mod tests {
         // Create first unit
         let args1 = QuickArgs {
             title: "First".to_string(),
+            handle: None,
             description: None,
             acceptance: Some("Done".to_string()),
             notes: None,
@@ -460,6 +468,7 @@ mod tests {
         // Create second unit
         let args2 = QuickArgs {
             title: "Second".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -489,6 +498,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "Indexed unit".to_string(),
+            handle: None,
             description: None,
             acceptance: Some("Indexed correctly".to_string()),
             notes: None,
@@ -520,6 +530,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "Full unit".to_string(),
+            handle: None,
             description: Some("A description".to_string()),
             acceptance: Some("All tests pass".to_string()),
             notes: Some("Some notes".to_string()),
@@ -554,6 +565,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "Cheating test".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -581,6 +593,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "Real test".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -614,6 +627,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "Passing verify ok".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -647,6 +661,7 @@ mod tests {
 
         let args = QuickArgs {
             title: "No verify".to_string(),
+            handle: None,
             description: None,
             acceptance: Some("Done".to_string()),
             notes: None,
@@ -680,6 +695,7 @@ mod tests {
 
             let args = QuickArgs {
                 title: "Quick lint error".to_string(),
+                handle: None,
                 description: None,
                 acceptance: None,
                 notes: None,
@@ -706,6 +722,7 @@ mod tests {
 
             let args = QuickArgs {
                 title: "Forced quick lint error".to_string(),
+                handle: None,
                 description: None,
                 acceptance: None,
                 notes: None,

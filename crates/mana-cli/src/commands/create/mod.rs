@@ -14,6 +14,8 @@ use crate::util::{find_similar_titles, DEFAULT_SIMILARITY_THRESHOLD};
 /// Create arguments structure for organizing all the parameters passed to create.
 pub struct CreateArgs {
     pub title: String,
+    /// Human handle override. Defaults to an auto-generated three-word handle.
+    pub handle: Option<String>,
     pub description: Option<String>,
     pub acceptance: Option<String>,
     pub notes: Option<String>,
@@ -46,6 +48,38 @@ pub struct CreateArgs {
     pub epic: bool,
     /// Skip duplicate title check
     pub force: bool,
+}
+
+impl CreateArgs {
+    #[cfg(test)]
+    pub(crate) fn test(title: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            handle: None,
+            description: None,
+            acceptance: None,
+            notes: None,
+            design: None,
+            verify: None,
+            priority: None,
+            labels: None,
+            assignee: None,
+            deps: None,
+            parent: None,
+            produces: None,
+            requires: None,
+            paths: None,
+            on_fail: None,
+            pass_ok: true,
+            claim: false,
+            by: None,
+            verify_timeout: None,
+            feature: false,
+            decisions: Vec::new(),
+            epic: false,
+            force: false,
+        }
+    }
 }
 
 /// Assign a child ID for a parent unit.
@@ -176,6 +210,7 @@ pub fn cmd_create(mana_dir: &Path, args: CreateArgs) -> Result<String> {
     let title = args.title.clone();
     let params = create::CreateParams {
         title: args.title,
+        handle: args.handle,
         description: args.description,
         acceptance: args.acceptance,
         notes: args.notes,

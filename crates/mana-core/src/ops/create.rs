@@ -51,6 +51,7 @@ fn next_top_level_id(mana_dir: &Path, config: &mut Config) -> Result<u32> {
 #[derive(Default)]
 pub struct CreateParams {
     pub title: String,
+    pub handle: Option<String>,
     pub description: Option<String>,
     pub acceptance: Option<String>,
     pub notes: Option<String>,
@@ -121,6 +122,7 @@ pub fn create(mana_dir: &Path, params: CreateParams) -> Result<CreateResult> {
     let slug = title_to_slug(&params.title);
     let mut unit = Unit::new(&unit_id, &params.title);
     unit.slug = Some(slug.clone());
+    unit.handle = params.handle;
     unit.ensure_handle();
     unit.description = params.description;
     unit.acceptance = params.acceptance;
@@ -301,6 +303,7 @@ pub mod tests {
     pub fn minimal_params(title: &str) -> CreateParams {
         CreateParams {
             title: title.to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,

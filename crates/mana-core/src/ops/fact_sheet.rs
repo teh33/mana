@@ -458,6 +458,7 @@ mod tests {
             &mana_dir,
             CreateParams {
                 title: "Open backing unit".to_string(),
+                handle: None,
                 description: None,
                 acceptance: None,
                 notes: None,

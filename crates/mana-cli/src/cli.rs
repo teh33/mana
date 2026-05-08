@@ -753,6 +753,9 @@ Examples:
         /// Unit title
         title: String,
 
+        /// Human handle override. Defaults to an auto-generated three-word handle.
+        #[arg(long)]
+        handle: Option<String>,
         /// Full description / agent context
         #[arg(long)]
         description: Option<String>,
@@ -1375,6 +1378,10 @@ pub enum CreateSubcommand {
         #[arg(long, conflicts_with = "title")]
         set_title: Option<String>,
 
+        /// Human handle override. Defaults to an auto-generated three-word handle.
+        #[arg(long)]
+        handle: Option<String>,
+
         /// Full description / agent context
         #[arg(long)]
         description: Option<String>,
@@ -1472,6 +1479,10 @@ pub struct CreateOpts {
     /// Unit title (alternative to positional arg)
     #[arg(long, conflicts_with = "title")]
     pub set_title: Option<String>,
+
+    /// Human handle override. Defaults to an auto-generated three-word handle.
+    #[arg(long)]
+    pub handle: Option<String>,
 
     /// Full description / agent context
     #[arg(long)]

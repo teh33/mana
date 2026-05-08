@@ -14,6 +14,7 @@ use crate::unit::Status;
 #[derive(Default)]
 pub struct Prefill {
     pub title: Option<String>,
+    pub handle: Option<String>,
     pub description: Option<String>,
     pub acceptance: Option<String>,
     pub notes: Option<String>,
@@ -244,6 +245,7 @@ pub fn interactive_create(mana_dir: &Path, prefill: Prefill) -> Result<CreateArg
 
     Ok(CreateArgs {
         title,
+        handle: prefill.handle,
         description,
         acceptance,
         notes: prefill.notes,

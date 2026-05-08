@@ -70,6 +70,7 @@ pub fn create_fact(mana_dir: &Path, params: FactParams) -> Result<FactResult> {
         mana_dir,
         CreateParams {
             title: params.title,
+            handle: None,
             description: params.description,
             acceptance: None,
             notes: None,

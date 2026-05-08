@@ -52,6 +52,7 @@ fn create_minimal_unit() {
 
     let args = CreateArgs {
         title: "First task".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -96,6 +97,7 @@ fn create_allows_unit_without_verify_or_acceptance() {
 
     let args = CreateArgs {
         title: "Goal unit".to_string(),
+        handle: None,
         description: Some("A parent/goal unit with no verify".to_string()),
         acceptance: None,
         notes: None,
@@ -142,6 +144,7 @@ fn create_increments_id() {
     // Create first unit
     let args1 = CreateArgs {
         title: "First".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
@@ -171,6 +174,7 @@ fn create_increments_id() {
     // Create second unit
     let args2 = CreateArgs {
         title: "Second".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -211,6 +215,7 @@ fn create_with_parent_assigns_child_id() {
     // Create parent unit
     let parent_args = CreateArgs {
         title: "Parent".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Children complete".to_string()),
         notes: None,
@@ -240,6 +245,7 @@ fn create_with_parent_assigns_child_id() {
     // Create child unit
     let child_args = CreateArgs {
         title: "Child 1".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -279,6 +285,7 @@ fn create_multiple_children() {
     // Create parent
     let parent_args = CreateArgs {
         title: "Parent".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("All children complete".to_string()),
         notes: None,
@@ -309,6 +316,7 @@ fn create_multiple_children() {
     for i in 1..=3 {
         let child_args = CreateArgs {
             title: format!("Child {}", i),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -353,6 +361,7 @@ fn create_with_all_fields() {
 
     let args = CreateArgs {
         title: "Complex unit".to_string(),
+        handle: None,
         description: Some("A description".to_string()),
         acceptance: Some("All tests pass".to_string()),
         notes: Some("Some notes".to_string()),
@@ -398,6 +407,7 @@ fn create_epic_sets_kind_epic() {
 
     let args = CreateArgs {
         title: "Epic parent".to_string(),
+        handle: None,
         description: Some("Top-level grouping record".to_string()),
         acceptance: None,
         notes: None,
@@ -435,6 +445,7 @@ fn create_updates_index() {
 
     let args = CreateArgs {
         title: "Indexed unit".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Indexed correctly".to_string()),
         notes: None,
@@ -505,6 +516,7 @@ fn create_rejects_priority_too_high() {
 
     let args = CreateArgs {
         title: "Invalid priority unit".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
@@ -546,6 +558,7 @@ fn create_accepts_valid_priorities() {
 
         let args = CreateArgs {
             title: format!("Unit with priority {}", priority),
+            handle: None,
             description: None,
             acceptance: Some("Done".to_string()),
             notes: None,
@@ -598,6 +611,7 @@ fn pre_create_hook_accepts_unit_creation() {
 
     let args = CreateArgs {
         title: "Unit with accepting hook".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
@@ -654,6 +668,7 @@ fn pre_create_hook_rejects_unit_creation() {
 
     let args = CreateArgs {
         title: "Unit with rejecting hook".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
@@ -728,6 +743,7 @@ fn post_create_hook_runs_after_creation() {
 
     let args = CreateArgs {
         title: "Unit with post-create hook".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
@@ -787,6 +803,7 @@ fn post_create_hook_failure_does_not_break_creation() {
 
     let args = CreateArgs {
         title: "Unit with failing post-create hook".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
@@ -844,6 +861,7 @@ fn untrusted_hooks_are_silently_skipped() {
 
     let args = CreateArgs {
         title: "Unit with untrusted hook".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
@@ -890,6 +908,7 @@ fn default_rejects_passing_verify() {
 
     let args = CreateArgs {
         title: "Cheating test".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -927,6 +946,7 @@ fn default_accepts_failing_verify() {
 
     let args = CreateArgs {
         title: "Real test".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -970,6 +990,7 @@ fn pass_ok_skips_fail_first_check() {
 
     let args = CreateArgs {
         title: "Passing verify ok".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1013,6 +1034,7 @@ fn no_verify_skips_fail_first_check() {
 
     let args = CreateArgs {
         title: "No verify".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
@@ -1056,6 +1078,7 @@ mod lint {
 
         let args = CreateArgs {
             title: "Linted error".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -1097,6 +1120,7 @@ mod lint {
 
         let args = CreateArgs {
             title: "Forced linted error".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -1131,6 +1155,7 @@ mod lint {
 
         let args = CreateArgs {
             title: "Linted warning".to_string(),
+            handle: None,
             description: None,
             acceptance: None,
             notes: None,
@@ -1170,6 +1195,7 @@ fn create_with_claim_sets_in_progress() {
 
     let args = CreateArgs {
         title: "Claimed task".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1213,6 +1239,7 @@ fn create_with_claim_without_by() {
 
     let args = CreateArgs {
         title: "Anon claimed".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1253,6 +1280,7 @@ fn create_without_claim_stays_open() {
 
     let args = CreateArgs {
         title: "Unclaimed task".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1294,6 +1322,7 @@ fn create_with_claim_and_parent() {
     // Create parent first
     let parent_args = CreateArgs {
         title: "Parent".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Children done".to_string()),
         notes: None,
@@ -1323,6 +1352,7 @@ fn create_with_claim_and_parent() {
     // Create child with --claim
     let child_args = CreateArgs {
         title: "Child claimed".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1366,6 +1396,7 @@ fn create_claim_rejects_missing_validation_criteria() {
 
     let args = CreateArgs {
         title: "No criteria claimed".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1409,6 +1440,7 @@ fn create_claim_accepts_with_acceptance() {
 
     let args = CreateArgs {
         title: "Claimed with acceptance".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done when tests pass".to_string()),
         notes: None,
@@ -1443,6 +1475,7 @@ fn create_claim_accepts_with_verify() {
 
     let args = CreateArgs {
         title: "Claimed with verify".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1478,6 +1511,7 @@ fn create_claim_with_parent_exempt_from_validation() {
     // Create parent first
     let parent_args = CreateArgs {
         title: "Parent".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Children done".to_string()),
         notes: None,
@@ -1508,6 +1542,7 @@ fn create_claim_with_parent_exempt_from_validation() {
     // Should succeed because child units with --parent are exempt
     let child_args = CreateArgs {
         title: "Child no criteria".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1546,6 +1581,7 @@ fn create_without_claim_exempt_from_validation() {
     // Parent/goal units without --claim don't need acceptance or verify
     let args = CreateArgs {
         title: "Goal unit no criteria".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1685,6 +1721,7 @@ fn create_next_depends_on_latest() {
     // Create the first unit
     let args1 = CreateArgs {
         title: "First step".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1714,6 +1751,7 @@ fn create_next_depends_on_latest() {
     // Create second unit via create_next
     let args2 = CreateArgs {
         title: "Second step".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1758,6 +1796,7 @@ fn create_next_chain_three_units() {
     // Create first unit normally
     let args1 = CreateArgs {
         title: "Step one".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1787,6 +1826,7 @@ fn create_next_chain_three_units() {
     // Chain second unit
     let args2 = CreateArgs {
         title: "Step two".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1816,6 +1856,7 @@ fn create_next_chain_three_units() {
     // Chain third unit
     let args3 = CreateArgs {
         title: "Step three".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1866,6 +1907,7 @@ fn create_next_merges_explicit_deps() {
     // Create two units normally
     let args1 = CreateArgs {
         title: "First".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1894,6 +1936,7 @@ fn create_next_merges_explicit_deps() {
 
     let args2 = CreateArgs {
         title: "Second".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1923,6 +1966,7 @@ fn create_next_merges_explicit_deps() {
     // Create next with explicit deps — should merge @latest (2) + explicit (1)
     let args3 = CreateArgs {
         title: "Third".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -1968,6 +2012,7 @@ fn create_next_fails_with_no_units() {
     // Try create next with no existing units — should fail
     let args = CreateArgs {
         title: "Orphan".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -2012,6 +2057,7 @@ fn create_feature_sets_feature_flag() {
 
     let args = CreateArgs {
         title: "User onboarding flow".to_string(),
+        handle: None,
         description: Some("Product feature for onboarding".to_string()),
         acceptance: None,
         notes: None,
@@ -2053,6 +2099,7 @@ fn create_feature_works_without_verify() {
     // --feature should work without --verify (features have no verify gate)
     let args = CreateArgs {
         title: "Dashboard redesign".to_string(),
+        handle: None,
         description: None,
         acceptance: None,
         notes: None,
@@ -2098,6 +2145,7 @@ fn create_without_feature_preserves_existing_behavior() {
     // can still be created without verify (goal/parent units)
     let args = CreateArgs {
         title: "Regular unit".to_string(),
+        handle: None,
         description: None,
         acceptance: Some("Done".to_string()),
         notes: None,
