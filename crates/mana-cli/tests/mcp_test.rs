@@ -118,9 +118,9 @@ fn mcp_json_rpc_response_error_serializes() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn mcp_tool_definitions_returns_all_ten_tools() {
+fn mcp_tool_definitions_returns_expected_tools() {
     let defs = tools::tool_definitions();
-    assert_eq!(defs.len(), 10, "Expected 10 tools, got {}", defs.len());
+    assert_eq!(defs.len(), 11, "Expected 11 tools, got {}", defs.len());
 
     let names: Vec<&str> = defs.iter().map(|t| t.name.as_str()).collect();
     assert!(names.contains(&"list_units"));
@@ -132,6 +132,7 @@ fn mcp_tool_definitions_returns_all_ten_tools() {
     assert!(names.contains(&"verify_unit"));
     assert!(names.contains(&"context_unit"));
     assert!(names.contains(&"status"));
+    assert!(names.contains(&"brief"));
     assert!(names.contains(&"tree"));
 }
 

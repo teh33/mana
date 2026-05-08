@@ -8,6 +8,7 @@ pub mod create;
 pub mod delete;
 pub mod dep;
 pub mod fact;
+pub mod fact_sheet;
 pub mod init;
 pub mod list;
 pub mod memory_context;

@@ -173,12 +173,16 @@ pub struct GraphNode {
 
 // Re-export orchestration and ops types
 pub use crate::ops::{
-    claim, close, context, create, delete, dep, fact, list, plan, show, update, verify,
+    claim, close, context, create, delete, dep, fact, fact_sheet, list, plan, show, update, verify,
 };
 
 pub use crate::ops::context::summarize_child_units as compare_sibling_jobs;
 pub use crate::ops::context::AgentContext;
 pub use crate::ops::fact::{FactParams, FactResult, VerifyFactsResult};
+pub use crate::ops::fact_sheet::{
+    FactSheetCheckEntry, FactSheetCheckResult, FactSheetDiagnostic, FactSheetDiagnosticSeverity,
+    FactSheetFact, FactSheetParseResult, FactSheetStatus,
+};
 pub use crate::ops::memory_context::{
     memory_context, MemoryContext, RecentWork, RelevantFact, WorkingUnit,
 };
@@ -1113,6 +1117,11 @@ pub fn create_fact(mana_dir: &Path, params: fact::FactParams) -> Result<FactResu
 /// ```
 pub fn verify_facts(mana_dir: &Path) -> Result<VerifyFactsResult> {
     fact::verify_facts(mana_dir)
+}
+
+/// Check the root `facts.mana` fact sheet.
+pub fn check_fact_sheet(mana_dir: &Path) -> Result<FactSheetCheckResult> {
+    fact_sheet::check_facts_sheet(mana_dir)
 }
 
 // Legacy aliases removed — beans→mana rename complete.

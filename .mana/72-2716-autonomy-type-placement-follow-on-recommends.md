@@ -15,8 +15,8 @@ labels:
 verify: test -f .mana/72-2716-autonomy-type-placement-follow-on-recommends.md && rg -q '^id:' .mana/72-2716-autonomy-type-placement-follow-on-recommends.md
 kind: epic
 unit_type: fact
-last_verified: '2026-04-09T23:16:10.195220Z'
-stale_after: '2026-05-09T23:16:10.195220Z'
+last_verified: '2026-05-08T04:50:29.812130Z'
+stale_after: '2026-06-07T04:50:29.812130Z'
 paths:
 - docs/rebuild/autonomy-gating-type-placement.md
 - mana/crates/mana-core/src/unit/types.rs

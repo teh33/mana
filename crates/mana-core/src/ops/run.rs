@@ -319,12 +319,14 @@ fn sort_units(units: &mut [ReadyUnit], weights: &HashMap<String, u32>) {
 fn build_retry_context(unit: &Unit) -> RunRetryContext {
     RunRetryContext {
         attempt_number: unit.attempts,
-        previous_failure: unit.attempt_log.iter().rev().find_map(|attempt| {
-            match attempt.outcome {
+        previous_failure: unit
+            .attempt_log
+            .iter()
+            .rev()
+            .find_map(|attempt| match attempt.outcome {
                 AttemptOutcome::Failed | AttemptOutcome::Abandoned => attempt.notes.clone(),
                 AttemptOutcome::Success => None,
-            }
-        }),
+            }),
         previous_notes: unit
             .attempt_log
             .iter()
@@ -464,11 +466,7 @@ pub fn compute_ready_queue(
 /// And so on. Within each wave, units are sorted by priority then critical-path weight.
 ///
 /// Set `simulate = true` for dry-run mode (includes units whose deps are not yet met).
-pub fn compute_run_plan(
-    mana_dir: &Path,
-    target: &RunTarget,
-    simulate: bool,
-) -> Result<RunPlan> {
+pub fn compute_run_plan(mana_dir: &Path, target: &RunTarget, simulate: bool) -> Result<RunPlan> {
     let queue = compute_ready_queue(mana_dir, target, simulate)?;
     let total_units = queue.units.len();
     let blocked = queue.blocked;

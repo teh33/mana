@@ -10,11 +10,34 @@ Entries before 0.3.1 are best-effort summaries from repository history and relea
 
 ### Added
 
+- Added `mana reparent` and the corresponding `mana-core` API for moving a unit under a new parent with cycle/descendant protection.
+- Added native parsing and validation for a root `facts.mana` project fact sheet.
+- Added support for compact fact lines in the form `- <fact text> @<status> [mana-ref] [{anchor}]`.
+- Added fact-sheet lifecycle statuses: `draft`, `spec`, `in_progress`, `verified`, `stale`, and `rejected`.
+- Added optional `{anchor}` identifiers for stable fact references, with duplicate-anchor diagnostics.
+- Added fact-sheet checks for malformed lines, unknown statuses, missing backing units, and `@verified` facts backed by open work.
+- Added `mana groom` as a dry-run project-management cleanup proposal command.
+- Added richer `mana brief` output, including scope, current-truth summaries, and management signals.
+
 ### Changed
+
+- Began evolving Mana facts toward a single-file fact sheet model while keeping existing fact-unit verification compatible.
+- Installed `facts.mana` checking behind `mana-core` APIs so future CLI, SQLite, and Imp context surfaces can share one parser/check path.
+- Updated the local Mana work graph with the planned fact-sheet, SQLite indexing, and Imp context integration slices.
+- Refined close auto-commit targeting to include the intended unit/archive paths and avoid broad incidental commits.
+- Updated close auto-commit handling to preserve already-staged user changes.
 
 ### Fixed
 
+- Hardened index loading so a corrupt cache can be rebuilt instead of breaking normal reads.
+- Fixed default Mana unit kind handling.
+- Fixed migrated Mana verify commands.
+- Fixed MCP close verify formatting.
+- Fixed generated archive/index state tracking so derived Mana state is not treated as canonical source.
+
 ### Removed
+
+- Stopped tracking generated Mana archive index state.
 
 ## [0.3.1] - 2026-04-27
 

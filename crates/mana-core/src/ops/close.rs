@@ -514,8 +514,19 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
         }
     }
 
-    // 3. Worktree merge (after verify passes, before archiving)
+    // 3. Worktree merge (after verify passes, before archiving).
+    // Use the original broad commit behavior for secondary worktrees so implementation
+    // files created in the isolated worktree are merged before the worktree is cleaned up.
     let worktree_info = detect_valid_worktree(project_root);
+    if let Some(ref wt_info) = worktree_info {
+        match handle_worktree_merge(wt_info, &unit)? {
+            WorktreeMergeStatus::Merged => {}
+            WorktreeMergeStatus::Conflict { files } => {
+                return Ok(CloseOutcome::MergeConflict { files, warnings });
+            }
+        }
+    }
+
     // 4. Feature gate — delegate to caller
     if unit.feature {
         use std::io::IsTerminal;
@@ -577,6 +588,13 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
         run_post_close_actions(&unit, project_root, opts.reason.as_deref(), config.as_ref());
     warnings.extend(post_close.warnings);
 
+    // Clean up worktree after successful close
+    if let Some(ref wt_info) = worktree_info {
+        if let Some(warning) = cleanup_worktree(wt_info) {
+            warnings.push(warning);
+        }
+    }
+
     // 8. Auto-close parents
     let auto_closed_parents = if mana_dir.exists() {
         if let Some(parent_id) = &unit.parent {
@@ -605,22 +623,6 @@ pub fn close(mana_dir: &Path, id: &str, opts: CloseOpts) -> Result<CloseOutcome>
         &archive_path,
         &auto_closed_parents,
     );
-
-    if let Some(ref wt_info) = worktree_info {
-        match handle_worktree_merge(wt_info, &unit, &close_commit_target_paths)? {
-            WorktreeMergeStatus::Merged => {}
-            WorktreeMergeStatus::Conflict { files } => {
-                return Ok(CloseOutcome::MergeConflict { files, warnings });
-            }
-        }
-    }
-
-    // Clean up worktree after successful close
-    if let Some(ref wt_info) = worktree_info {
-        if let Some(warning) = cleanup_worktree(wt_info) {
-            warnings.push(warning);
-        }
-    }
 
     // Auto-commit if configured (skip in worktree mode — it already commits)
     let auto_commit_result = if worktree_info.is_none() {
@@ -1329,7 +1331,6 @@ fn detect_valid_worktree(project_root: &Path) -> Option<crate::worktree::Worktre
 fn handle_worktree_merge(
     wt_info: &crate::worktree::WorktreeInfo,
     unit: &Unit,
-    target_paths: &[String],
 ) -> Result<WorktreeMergeStatus> {
     let message = expand_commit_template(
         DEFAULT_COMMIT_TEMPLATE,
@@ -1338,7 +1339,7 @@ fn handle_worktree_merge(
         unit.parent.as_deref(),
         &unit.labels,
     );
-    crate::worktree::commit_worktree_paths(&wt_info.worktree_path, &message, target_paths)?;
+    crate::worktree::commit_worktree_changes(&wt_info.worktree_path, &message)?;
 
     match crate::worktree::merge_to_main(wt_info, &unit.id)? {
         crate::worktree::MergeResult::Success | crate::worktree::MergeResult::NothingToCommit => {

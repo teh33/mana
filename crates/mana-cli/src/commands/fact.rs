@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
-use mana_core::ops::fact;
+use mana_core::ops::{fact, fact_sheet};
+use serde::Serialize;
 
 /// Create a verified fact (convenience wrapper around create with unit_type=fact).
 ///
@@ -47,9 +48,41 @@ pub fn cmd_fact(
 ///
 /// Suspect propagation: facts that require artifacts from failing/stale facts
 /// are marked as suspect (up to depth 3).
-pub fn cmd_verify_facts(mana_dir: &Path) -> Result<()> {
+pub fn cmd_verify_facts(mana_dir: &Path, json: bool) -> Result<()> {
+    // Run the lightweight fact-sheet checker first so `mana verify-facts` remains
+    // compatible while the fact surface evolves toward `mana fact check`.
+    let sheet_result = fact_sheet::check_facts_sheet(mana_dir)?;
     let result = fact::verify_facts(mana_dir)?;
 
+    if json {
+        let output = FactCheckJson {
+            fact_sheet: &sheet_result,
+            fact_units: &result,
+        };
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else {
+        print_fact_sheet_check(&sheet_result);
+        print_fact_unit_check(&result);
+    }
+
+    if sheet_result.has_errors() {
+        anyhow::bail!("fact sheet check failed");
+    }
+
+    if result.failing_count > 0 {
+        anyhow::bail!("{} fact(s) failed verification", result.failing_count);
+    }
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct FactCheckJson<'a> {
+    fact_sheet: &'a fact_sheet::FactSheetCheckResult,
+    fact_units: &'a fact::VerifyFactsResult,
+}
+
+fn print_fact_unit_check(result: &fact::VerifyFactsResult) {
     for entry in &result.entries {
         if entry.stale {
             eprintln!("⚠ STALE: [{}] \"{}\"", entry.id, entry.title);
@@ -84,12 +117,43 @@ pub fn cmd_verify_facts(mana_dir: &Path) -> Result<()> {
         result.failing_count,
         result.suspect_count
     );
+}
 
-    if result.failing_count > 0 {
-        anyhow::bail!("{} fact(s) failed verification", result.failing_count);
+fn print_fact_sheet_check(result: &fact_sheet::FactSheetCheckResult) {
+    if result.facts.is_empty() && result.diagnostics.is_empty() && result.entries.is_empty() {
+        return;
     }
 
-    Ok(())
+    println!("Fact sheet: {}", result.path.display());
+
+    for diagnostic in &result.diagnostics {
+        let line = diagnostic
+            .line
+            .map(|line| format!("line {line}: "))
+            .unwrap_or_default();
+        eprintln!("  ✗ {}{}", line, diagnostic.message);
+    }
+
+    for entry in &result.entries {
+        if entry.passed {
+            println!(
+                "  ✓ line {} [{}] {}",
+                entry.fact.line,
+                entry.fact.status.as_str(),
+                entry.fact.text
+            );
+        } else if let Some(message) = &entry.message {
+            eprintln!(
+                "  ✗ line {} [{}] {} — {}",
+                entry.fact.line,
+                entry.fact.status.as_str(),
+                entry.fact.text,
+                message
+            );
+        }
+    }
+
+    println!();
 }
 
 #[cfg(test)]

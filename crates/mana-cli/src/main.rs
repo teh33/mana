@@ -23,19 +23,19 @@ mod cli;
 
 use cli::{
     Cli, Command, ConfigCommand, CreateOpts, CreateSubcommand, DepCommand, DoctorCommand,
-    McpCommand,
+    FactCommand, McpCommand,
 };
 use mana::commands::create::CreateArgs;
 use mana::commands::plan::PlanArgs;
 use mana::commands::quick::QuickArgs;
 use mana::commands::{
-    cmd_adopt, cmd_agents, cmd_brief, cmd_claim, cmd_close, cmd_config_get, cmd_config_set, cmd_context,
-    cmd_create, cmd_delete, cmd_dep_add, cmd_dep_list, cmd_dep_remove, cmd_diff, cmd_doctor,
-    cmd_edit, cmd_fact, cmd_graph, cmd_init, cmd_list, cmd_locks, cmd_locks_clear, cmd_logs,
-    cmd_mcp_serve, cmd_memory_context, cmd_move_from, cmd_move_to, cmd_mutate, cmd_next,
-    cmd_onboard, cmd_plan, cmd_quick, cmd_recall, cmd_release, cmd_reopen, cmd_run, cmd_search,
-    cmd_show, cmd_stats, cmd_status, cmd_sync, cmd_tidy, cmd_trace, cmd_tree, cmd_trust,
-    cmd_unarchive, cmd_update, cmd_verify, cmd_verify_facts,
+    cmd_adopt, cmd_agents, cmd_brief, cmd_claim, cmd_close, cmd_config_get, cmd_config_set,
+    cmd_context, cmd_create, cmd_delete, cmd_dep_add, cmd_dep_list, cmd_dep_remove, cmd_diff,
+    cmd_doctor, cmd_edit, cmd_fact, cmd_graph, cmd_groom, cmd_init, cmd_list, cmd_locks,
+    cmd_locks_clear, cmd_logs, cmd_mcp_serve, cmd_memory_context, cmd_move_from, cmd_move_to,
+    cmd_mutate, cmd_next, cmd_onboard, cmd_plan, cmd_quick, cmd_recall, cmd_release, cmd_reopen,
+    cmd_run, cmd_search, cmd_show, cmd_stats, cmd_status, cmd_sync, cmd_tidy, cmd_trace, cmd_tree,
+    cmd_trust, cmd_unarchive, cmd_update, cmd_verify, cmd_verify_facts,
     review::{cmd_review, ReviewArgs},
 };
 use mana::discovery::{find_mana_dir, find_outermost_mana_dir};
@@ -749,6 +749,16 @@ fn main() -> Result<()> {
             cmd_tidy(&mana_dir, dry_run, &out)
         }
         Command::Stats { json, no_json } => cmd_stats(&mana_dir, auto_json(json, no_json)),
+        Command::Groom {
+            id,
+            dry_run,
+            json,
+            no_json,
+        } => {
+            validate_unit_id(&id)?;
+            let resolved_id = resolve_unit_id(&id, &mana_dir)?;
+            cmd_groom(&mana_dir, &resolved_id, dry_run, auto_json(json, no_json))
+        }
         Command::Doctor { command } => {
             let fix = matches!(command, Some(DoctorCommand::Fix));
             cmd_doctor(&mana_dir, fix)
@@ -888,17 +898,29 @@ fn main() -> Result<()> {
             cmd_logs(&mana_dir, &resolved_id, follow, all)
         }
 
-        Command::Fact {
-            title,
-            verify,
-            description,
-            paths,
-            ttl,
-            pass_ok,
-        } => {
-            cmd_fact(&mana_dir, title, verify, description, paths, ttl, pass_ok)?;
-            Ok(())
-        }
+        Command::Fact { command, args } => match command {
+            Some(FactCommand::Check { json, no_json }) => {
+                cmd_verify_facts(&mana_dir, auto_json(json, no_json))
+            }
+            None => {
+                let title = args.title.ok_or_else(|| {
+                    anyhow::anyhow!("mana fact: title is required unless using a subcommand")
+                })?;
+                let verify = args.verify.ok_or_else(|| {
+                    anyhow::anyhow!("mana fact: --verify is required when creating a fact unit")
+                })?;
+                cmd_fact(
+                    &mana_dir,
+                    title,
+                    verify,
+                    args.description,
+                    args.paths,
+                    args.ttl,
+                    args.pass_ok,
+                )?;
+                Ok(())
+            }
+        },
 
         Command::Recall {
             query,
@@ -907,7 +929,7 @@ fn main() -> Result<()> {
             no_json,
         } => cmd_recall(&mana_dir, &query, all, auto_json(json, no_json)),
 
-        Command::VerifyFacts => cmd_verify_facts(&mana_dir),
+        Command::VerifyFacts => cmd_verify_facts(&mana_dir, false),
 
         Command::Config { command } => match command {
             ConfigCommand::Get { key } => cmd_config_get(&mana_dir, &key),

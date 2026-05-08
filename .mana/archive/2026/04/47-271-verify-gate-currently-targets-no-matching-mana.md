@@ -20,6 +20,7 @@ verify: cd /Users/asher/mana && cargo test -p mana-pool budget -- 2>&1 | grep 't
 is_archived: true
 kind: epic
 unit_type: fact
+last_verified: '2026-05-08T04:50:29.812130Z'
 paths:
 - '.mana/archive/2026/04/27.1-budget-and-circuit-breaker-for-dispatch.md'
 - '.mana/61-mana-pool-budget-filter-currently-matches-2-dispat.md'

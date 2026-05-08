@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 /// Parse priority from "P0"-"P4", "p0"-"p4", or "0"-"4".
 fn parse_priority(s: &str) -> Result<u8, String> {
@@ -57,6 +57,7 @@ Commands:
 
   MAINTENANCE
     tidy         Clean up: archive, release stale claims, close passing units
+    groom       Propose project-management cleanup actions (dry-run only)
     doctor       Health check -- orphans, cycles, index freshness
     config       Manage project configuration
     stats        Project statistics
@@ -683,15 +684,34 @@ Examples:
         force: bool,
     },
 
-    /// Health check -- index, dependency graph, and stale/misleading config
+    /// Propose project-management cleanup actions (dry-run only)
     #[command(display_order = 42)]
+    Groom {
+        /// Root unit ID to inspect
+        id: String,
+
+        /// Show proposals without applying changes (required; apply is not implemented)
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Force human-readable output even when piped
+        #[arg(long = "no-json", conflicts_with = "json")]
+        no_json: bool,
+    },
+
+    /// Health check -- index, dependency graph, and stale/misleading config
+    #[command(display_order = 43)]
     Doctor {
         #[command(subcommand)]
         command: Option<DoctorCommand>,
     },
 
     /// Manage hook trust (enable/disable hook execution)
-    #[command(display_order = 44)]
+    #[command(display_order = 45)]
     Trust {
         /// Revoke trust (disable hooks)
         #[arg(long)]
@@ -703,7 +723,7 @@ Examples:
     },
 
     /// Unarchive a unit (move from archive back to main units directory)
-    #[command(display_order = 45)]
+    #[command(display_order = 46)]
     Unarchive {
         /// Unit ID to unarchive
         id: String,
@@ -977,43 +997,26 @@ Model keys:
     },
 
     // -- MEMORY --
-    /// Create a verified fact
+    /// Manage verified facts and project fact sheets
     ///
-    /// Facts are verified truths about the project that persist across agent sessions.
-    /// Each fact has a verify command that proves it's still true, and a TTL (default
-    /// 30 days). Stale facts appear in `mana context` output. Re-check all facts with
-    /// `mana verify-facts`. Good facts capture things agents need but can't infer from code.
+    /// Without a subcommand, creates a fact unit for compatibility. Use
+    /// `mana fact check` to validate root `facts.mana` and existing fact units.
     #[command(
         display_order = 50,
+        args_conflicts_with_subcommands = true,
         after_help = "\
 Examples:
   mana fact \"API uses Axum 0.8\" --verify \"grep -q 'axum = \\\"0.8' Cargo.toml\"
   mana fact \"Auth tokens expire after 24h\" --verify \"grep -q '24 * 60' src/config.rs\"
-  mana fact \"Tests require Docker\" --verify \"docker info >/dev/null 2>&1\" --ttl 90"
+  mana fact check
+  mana fact check --json"
     )]
     Fact {
-        /// Fact title (what is true)
-        title: String,
+        #[command(subcommand)]
+        command: Option<FactCommand>,
 
-        /// Shell command that verifies this fact (required)
-        #[arg(long)]
-        verify: String,
-
-        /// Description / additional context
-        #[arg(long)]
-        description: Option<String>,
-
-        /// Comma-separated file paths this fact is relevant to
-        #[arg(long)]
-        paths: Option<String>,
-
-        /// Time-to-live in days before fact becomes stale (default: 30)
-        #[arg(long)]
-        ttl: Option<i64>,
-
-        /// Skip fail-first check
-        #[arg(long, short = 'p')]
-        pass_ok: bool,
+        #[command(flatten)]
+        args: FactArgs,
     },
 
     /// Search units by keyword
@@ -1217,6 +1220,46 @@ Install permanently:
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: clap_complete::Shell,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct FactArgs {
+    /// Fact title (what is true)
+    pub title: Option<String>,
+
+    /// Shell command that verifies this fact (required when creating a fact unit)
+    #[arg(long)]
+    pub verify: Option<String>,
+
+    /// Description / additional context
+    #[arg(long)]
+    pub description: Option<String>,
+
+    /// Comma-separated file paths this fact is relevant to
+    #[arg(long)]
+    pub paths: Option<String>,
+
+    /// Time-to-live in days before fact becomes stale (default: 30)
+    #[arg(long)]
+    pub ttl: Option<i64>,
+
+    /// Skip fail-first check
+    #[arg(long, short = 'p')]
+    pub pass_ok: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum FactCommand {
+    /// Check facts.mana and re-verify existing fact units
+    Check {
+        /// Output machine-readable JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Force human-readable output even when piped
+        #[arg(long = "no-json", conflicts_with = "json")]
+        no_json: bool,
     },
 }
 

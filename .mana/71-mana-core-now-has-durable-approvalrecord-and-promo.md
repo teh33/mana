@@ -11,8 +11,8 @@ labels:
 verify: cd /Users/asher/mana && rg -q 'struct ApprovalRecord' crates/mana-core/src && rg -q 'struct PromotionRecord' crates/mana-core/src && rg -q 'enum ReviewGateOutcome' crates/mana-core/src && rg -q 'fn validate\(&self\) -> Result<\(\), String>' crates/mana-core/src/unit/types.rs && cargo test -p mana-core approval_record --lib && cargo test -p mana-core promotion_record --lib && cargo check -p mana-core
 kind: epic
 unit_type: fact
-last_verified: '2026-04-09T23:16:10.195220Z'
-stale_after: '2026-05-09T23:16:10.195220Z'
+last_verified: '2026-05-08T04:50:29.812130Z'
+stale_after: '2026-06-07T04:50:29.812130Z'
 paths:
 - mana/crates/mana-core/src/unit/types.rs
 - docs/rebuild/approval-and-promotion-records.md

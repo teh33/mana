@@ -15,8 +15,8 @@ labels:
 verify: test -f .mana/79-root-ci-verify-gate-excludes-some-audit-strings-bu.md && rg -q '^id:' .mana/79-root-ci-verify-gate-excludes-some-audit-strings-bu.md
 kind: epic
 unit_type: fact
-last_verified: '2026-04-09T23:16:10.195220Z'
-stale_after: '2026-05-09T23:16:10.195220Z'
+last_verified: '2026-05-08T04:50:29.812130Z'
+stale_after: '2026-06-07T04:50:29.812130Z'
 paths:
 - '.github/workflows/ci.yml'
 - mana/.github/workflows/ci.yml

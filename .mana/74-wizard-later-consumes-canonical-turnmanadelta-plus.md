@@ -11,8 +11,8 @@ labels:
 verify: test -f .mana/74-wizard-later-consumes-canonical-turnmanadelta-plus.md && rg -q '^id:' .mana/74-wizard-later-consumes-canonical-turnmanadelta-plus.md
 kind: epic
 unit_type: fact
-last_verified: '2026-04-09T23:16:10.195220Z'
-stale_after: '2026-05-09T23:16:10.195220Z'
+last_verified: '2026-05-08T04:50:29.812130Z'
+stale_after: '2026-06-07T04:50:29.812130Z'
 paths:
 - docs/rebuild/wizard-mana-review-queue.md
 - docs/rebuild/mana-turn-delta-contract.md
