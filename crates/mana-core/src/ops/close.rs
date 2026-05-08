@@ -1476,73 +1476,16 @@ fn auto_commit_on_close(
         };
     }
 
-    let add_output = std::process::Command::new("git")
-        .arg("add")
-        .arg("-A")
-        .arg("--")
-        .args(target_paths)
-        .current_dir(project_root)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .output();
-
-    match add_output {
-        Ok(output) if !output.status.success() => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return AutoCommitResult {
-                message,
-                committed: false,
-                warning: Some(format!(
-                    "git add targeted paths failed (exit {}): {}",
-                    output.status.code().unwrap_or(-1),
-                    stderr.trim()
-                )),
-            };
-        }
-        Err(e) => {
-            return AutoCommitResult {
-                message,
-                committed: false,
-                warning: Some(format!("git add targeted paths failed: {}", e)),
-            };
-        }
-        _ => {}
-    }
-
-    let commit_result = std::process::Command::new("git")
-        .args(["commit", "-m", &message])
-        .current_dir(project_root)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .output();
-
-    match commit_result {
-        Ok(output) if output.status.success() => AutoCommitResult {
+    match crate::worktree::commit_worktree_paths(project_root, &message, target_paths) {
+        Ok(committed) => AutoCommitResult {
             message,
-            committed: true,
+            committed,
             warning: None,
         },
-        Ok(output) if output.status.code() == Some(1) => AutoCommitResult {
+        Err(err) => AutoCommitResult {
             message,
             committed: false,
-            warning: None,
-        },
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            AutoCommitResult {
-                message,
-                committed: false,
-                warning: Some(format!(
-                    "git commit failed (exit {}): {}",
-                    output.status.code().unwrap_or(-1),
-                    stderr.trim()
-                )),
-            }
-        }
-        Err(e) => AutoCommitResult {
-            message,
-            committed: false,
-            warning: Some(format!("git commit failed: {}", e)),
+            warning: Some(format!("git targeted auto-commit failed: {err}")),
         },
     }
 }
@@ -2345,6 +2288,58 @@ mod tests {
     }
 
     #[test]
+    fn close_auto_commit_preserves_preexisting_staged_changes() {
+        with_temp_home(|| {
+            let config = Config {
+                project: "test".to_string(),
+                next_id: 100,
+                auto_commit: true,
+                ..Config::default()
+            };
+            let (_dir, mana_dir) = setup_git_mana_dir_with_config(config);
+            let project_root = mana_dir.parent().unwrap();
+
+            let unit = Unit::new("1", "Close Me");
+            write_unit(&mana_dir, &unit);
+            run_git(project_root, &["add", ".mana"]);
+            run_git(project_root, &["commit", "-m", "Add unit"]);
+
+            fs::write(project_root.join("staged.txt"), "preexisting staged").unwrap();
+            fs::write(project_root.join("dirty.txt"), "preexisting dirty").unwrap();
+            run_git(project_root, &["add", "staged.txt"]);
+
+            let result = close(
+                &mana_dir,
+                "1",
+                CloseOpts {
+                    reason: None,
+                    force: false,
+                    defer_verify: false,
+                },
+            )
+            .unwrap();
+
+            let close_result = match result {
+                CloseOutcome::Closed(result) => result,
+                other => panic!("Expected Closed outcome, got {:?}", other),
+            };
+            let auto_commit = close_result.auto_commit_result.expect("auto-commit result");
+            assert!(auto_commit.warning.is_none(), "{:?}", auto_commit.warning);
+            assert!(auto_commit.committed);
+
+            let changed_files =
+                git_stdout(project_root, &["show", "--name-only", "--format=", "HEAD"]);
+            assert!(changed_files.contains(".mana/archive"), "{changed_files}");
+            assert!(!changed_files.contains("staged.txt"), "{changed_files}");
+            assert!(!changed_files.contains("dirty.txt"), "{changed_files}");
+
+            let status = git_stdout(project_root, &["status", "--short"]);
+            assert!(status.contains("A  staged.txt"), "{status}");
+            assert!(status.contains("?? dirty.txt"), "{status}");
+        });
+    }
+
+    #[test]
     fn close_auto_commit_uses_default_template_and_includes_index_updates() {
         with_temp_home(|| {
             let config = Config {
@@ -2383,6 +2378,7 @@ mod tests {
             let auto_commit = close_result
                 .auto_commit_result
                 .expect("auto-commit result should be present when enabled");
+            assert!(auto_commit.warning.is_none(), "{:?}", auto_commit.warning);
             assert!(auto_commit.committed);
             assert_eq!(
                 auto_commit.message,

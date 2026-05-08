@@ -160,11 +160,21 @@ pub fn detect_worktree(cwd: &std::path::Path) -> Result<Option<WorktreeInfo>> {
 
 /// Commit the specified paths in the worktree directory.
 ///
-/// Runs `git add -A -- <paths>` followed by `git commit -m <message>` in the
-/// given directory. Paths must be relative to the repository root. `-A` is scoped
-/// by the explicit pathspecs so deletions for target paths are recorded without
-/// staging unrelated worktree changes.
+/// Uses a temporary index seeded from `HEAD`, stages only the requested paths
+/// into that temporary index, creates a commit from that tree, and moves `HEAD`
+/// to the new commit. This records additions/modifications/deletions for the
+/// target paths without including or disturbing unrelated pre-staged changes in
+/// the real index. Paths must be relative to the repository root.
 pub fn commit_worktree_paths(
+    cwd: &std::path::Path,
+    message: &str,
+    paths: &[String],
+) -> Result<bool> {
+    commit_worktree_paths_preserve_index(cwd, message, paths)
+}
+
+/// Commit the specified paths without including or disturbing the real index.
+pub fn commit_worktree_paths_preserve_index(
     cwd: &std::path::Path,
     message: &str,
     paths: &[String],
@@ -173,14 +183,39 @@ pub fn commit_worktree_paths(
         return Ok(false);
     }
 
-    let add_output = Command::new("git")
+    let repo_root = git_stdout(cwd, &["rev-parse", "--show-toplevel"])?;
+    let index_path = std::env::temp_dir().join(format!(
+        "mana-targeted-index-{}-{}",
+        std::process::id(),
+        unique_suffix()
+    ));
+
+    let result = commit_with_temp_index(cwd, PathBuf::from(repo_root), &index_path, message, paths);
+    cleanup_temp_index(&index_path);
+    result
+}
+
+fn commit_with_temp_index(
+    cwd: &std::path::Path,
+    repo_root: PathBuf,
+    index_path: &std::path::Path,
+    message: &str,
+    paths: &[String],
+) -> Result<bool> {
+    let index = index_path.to_string_lossy().to_string();
+    git_status(
+        cwd,
+        &["read-tree", "HEAD"],
+        Some((&index, repo_root.as_path())),
+        "git read-tree failed",
+    )?;
+
+    let add_output = git_command_with_env(cwd, Some((&index, repo_root.as_path())))
         .arg("add")
         .arg("-A")
         .arg("--")
         .args(paths)
-        .current_dir(cwd)
         .output()?;
-
     if !add_output.status.success() {
         return Err(anyhow!(
             "git add failed: {}",
@@ -188,7 +223,117 @@ pub fn commit_worktree_paths(
         ));
     }
 
-    commit_staged_changes(cwd, message)
+    let tree = git_stdout_with_env(
+        cwd,
+        &["write-tree"],
+        Some((&index, repo_root.as_path())),
+        "git write-tree failed",
+    )?;
+    let head_tree = git_stdout(cwd, &["rev-parse", "HEAD^{tree}"])?;
+    if tree == head_tree {
+        return Ok(false);
+    }
+
+    let commit_output = Command::new("git")
+        .arg("commit-tree")
+        .arg(&tree)
+        .arg("-p")
+        .arg("HEAD")
+        .arg("-m")
+        .arg(message)
+        .current_dir(cwd)
+        .output()?;
+    if !commit_output.status.success() {
+        return Err(anyhow!(
+            "git commit-tree failed: {}",
+            String::from_utf8_lossy(&commit_output.stderr)
+        ));
+    }
+    let new_head = String::from_utf8_lossy(&commit_output.stdout)
+        .trim()
+        .to_string();
+    if new_head.is_empty() {
+        return Err(anyhow!("git commit-tree produced an empty commit id"));
+    }
+
+    git_status(
+        cwd,
+        &[
+            "update-ref",
+            "-m",
+            &format!("commit: {message}"),
+            "HEAD",
+            &new_head,
+        ],
+        None,
+        "git update-ref failed",
+    )?;
+
+    Ok(true)
+}
+
+fn git_command_with_env(
+    cwd: &std::path::Path,
+    temp_index: Option<(&str, &std::path::Path)>,
+) -> Command {
+    let mut command = Command::new("git");
+    command.current_dir(cwd);
+    if let Some((index, work_tree)) = temp_index {
+        command
+            .env("GIT_INDEX_FILE", index)
+            .env("GIT_WORK_TREE", work_tree);
+    }
+    command
+}
+
+fn git_status(
+    cwd: &std::path::Path,
+    args: &[&str],
+    temp_index: Option<(&str, &std::path::Path)>,
+    context: &str,
+) -> Result<()> {
+    let output = git_command_with_env(cwd, temp_index).args(args).output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(anyhow!(
+        "{}: {}",
+        context,
+        String::from_utf8_lossy(&output.stderr)
+    ))
+}
+
+fn git_stdout(cwd: &std::path::Path, args: &[&str]) -> Result<String> {
+    git_stdout_with_env(cwd, args, None, "git command failed")
+}
+
+fn git_stdout_with_env(
+    cwd: &std::path::Path,
+    args: &[&str],
+    temp_index: Option<(&str, &std::path::Path)>,
+    context: &str,
+) -> Result<String> {
+    let output = git_command_with_env(cwd, temp_index).args(args).output()?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "{}: {}",
+            context,
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn cleanup_temp_index(path: &std::path::Path) {
+    let _ = std::fs::remove_file(path);
+    let _ = std::fs::remove_file(path.with_extension("lock"));
+}
+
+fn unique_suffix() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0)
 }
 
 /// Commit all changes in the specified worktree directory.
