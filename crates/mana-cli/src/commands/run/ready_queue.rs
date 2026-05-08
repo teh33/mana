@@ -9,7 +9,7 @@ use anyhow::Result;
 
 use crate::failure;
 use crate::history::{self, AgentHistoryEntry};
-use crate::index::{ArchiveIndex, Index, IndexEntry};
+use crate::index::Index;
 use crate::pi_output::{self, AgentEvent};
 use crate::prompt::{build_agent_prompt, PromptOptions};
 use crate::stream::{self, StreamEvent};
@@ -21,12 +21,16 @@ use super::plan::SizedUnit;
 use super::wave::{compute_downstream_weights, compute_waves};
 use super::{format_duration, AgentResult, PoolBatchVerifySummary};
 
+#[cfg(test)]
+use crate::index::{ArchiveIndex, IndexEntry};
+
 /// Check if all dependencies of an index entry are closed.
 ///
 /// Checks both the active index and the archive index. A dependency found in
 /// the archive is considered satisfied (archived means closed). A dependency
 /// found in neither index is treated as unsatisfied (catches typos).
-pub(super) fn all_deps_closed(entry: &IndexEntry, index: &Index, archive: &ArchiveIndex) -> bool {
+#[cfg(test)]
+fn all_deps_closed(entry: &IndexEntry, index: &Index, archive: &ArchiveIndex) -> bool {
     for dep_id in &entry.dependencies {
         match index.units.iter().find(|e| e.id == *dep_id) {
             Some(dep) if dep.status == Status::Closed => {}
