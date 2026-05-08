@@ -20,7 +20,7 @@ pub use freshness::{
 };
 pub use rebuild::RebuildReport;
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 const INDEX_FILENAME: &str = "index.sqlite";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,10 +145,24 @@ impl Index {
 
     fn initialize(&self, mana_dir: &Path) -> Result<()> {
         self.conn.execute_batch(schema::SCHEMA_SQL)?;
+        self.apply_lightweight_migrations()?;
         self.set_meta("schema_version", &SCHEMA_VERSION.to_string())?;
         self.set_meta("mana_root", &mana_dir.display().to_string())?;
         self.set_meta("stale", "false")?;
         self.set_meta("stale_reason", "")?;
+        Ok(())
+    }
+
+    fn apply_lightweight_migrations(&self) -> Result<()> {
+        let has_handle_column: bool = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('units') WHERE name = 'handle')",
+            [],
+            |row| row.get(0),
+        )?;
+        if !has_handle_column {
+            self.conn
+                .execute("ALTER TABLE units ADD COLUMN handle TEXT", [])?;
+        }
         Ok(())
     }
 

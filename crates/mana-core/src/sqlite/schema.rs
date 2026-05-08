@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS source_files (
 CREATE TABLE IF NOT EXISTS units (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
+  handle TEXT,
   slug TEXT,
   status TEXT NOT NULL,
   priority INTEGER NOT NULL,

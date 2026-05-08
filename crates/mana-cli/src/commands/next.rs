@@ -186,6 +186,7 @@ mod tests {
 
     fn make_entry(id: &str, priority: u8) -> IndexEntry {
         IndexEntry {
+            handle: None,
             id: id.to_string(),
             title: format!("Unit {}", id),
             status: Status::Open,
@@ -216,6 +217,7 @@ mod tests {
                 IndexEntry {
                     id: "1".to_string(),
                     title: "Epic".to_string(),
+                    handle: None,
                     status: Status::Open,
                     priority: 1,
                     parent: None,

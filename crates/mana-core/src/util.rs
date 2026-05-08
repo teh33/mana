@@ -808,6 +808,7 @@ mod tests {
                 IndexEntry {
                     id: "1".to_string(),
                     title: "Fix auth timeout".to_string(),
+                    handle: None,
                     status: Status::Open,
                     priority: 2,
                     parent: None,
@@ -830,6 +831,7 @@ mod tests {
                 IndexEntry {
                     id: "2".to_string(),
                     title: "Add database migration".to_string(),
+                    handle: None,
                     status: Status::Open,
                     priority: 2,
                     parent: None,
@@ -864,6 +866,7 @@ mod tests {
 
         let index = Index {
             units: vec![IndexEntry {
+                handle: None,
                 id: "1".to_string(),
                 title: "Fix auth timeout".to_string(),
                 status: Status::Closed,
@@ -898,6 +901,7 @@ mod tests {
 
         let index = Index {
             units: vec![IndexEntry {
+                handle: None,
                 id: "1".to_string(),
                 title: "Fix auth timeout".to_string(),
                 status: Status::Open,

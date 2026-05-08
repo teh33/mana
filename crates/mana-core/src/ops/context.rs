@@ -8,6 +8,7 @@ use crate::config::Config;
 use crate::ctx_assembler::{extract_paths, read_file};
 use crate::discovery::find_unit_file;
 use crate::index::Index;
+use crate::resolve::resolve_unit;
 use crate::sqlite;
 use crate::unit::{AttemptOutcome, Status, Unit};
 
@@ -60,13 +61,9 @@ pub struct AgentContext {
 /// explicit `unit.paths` and regex-extracted paths from the description,
 /// reads file contents, and extracts structural summaries.
 pub fn assemble_agent_context(mana_dir: &Path, id: &str) -> Result<AgentContext> {
-    let unit_path =
-        find_unit_file(mana_dir, id).context(format!("Could not find unit with ID: {}", id))?;
-
-    let unit = Unit::from_file(&unit_path).context(format!(
-        "Failed to parse unit from: {}",
-        unit_path.display()
-    ))?;
+    let resolved = resolve_unit(mana_dir, id)?;
+    let _unit_path = resolved.path;
+    let unit = resolved.unit;
 
     let project_dir = mana_dir
         .parent()

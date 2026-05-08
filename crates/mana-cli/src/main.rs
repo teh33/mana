@@ -40,6 +40,7 @@ use mana::commands::{
 };
 use mana::discovery::{find_mana_dir, find_outermost_mana_dir};
 use mana::index::Index;
+use mana::resolve::resolve_unit;
 use mana::util::validate_unit_id;
 
 // Helper to resolve a single unit ID (handles @latest selector or plain IDs)
@@ -55,7 +56,7 @@ fn resolve_unit_id(id: &str, mana_dir: &std::path::Path) -> Result<String> {
     } else if id.starts_with('@') {
         anyhow::bail!("Unknown selector: {}", id)
     } else {
-        Ok(id.to_string())
+        resolve_unit(mana_dir, id).map(|resolved| resolved.unit.id)
     }
 }
 
@@ -425,10 +426,7 @@ fn main() -> Result<()> {
             short,
             history,
         } => {
-            // Skip validation for selectors (start with @)
-            if !id.starts_with('@') {
-                validate_unit_id(&id)?;
-            }
+            // Selectors keep their own syntax; otherwise allow either an ID or a handle.
             let resolved_id = resolve_unit_id(&id, &mana_dir)?;
             cmd_show(
                 &resolved_id,

@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use crate::config::resolve_identity;
 use crate::discovery::find_unit_file;
 use crate::index::Index;
+use crate::resolve::resolve_unit;
 use crate::unit::{AttemptOutcome, AttemptRecord, Status, Unit};
 
 /// Parameters for claiming a unit.
@@ -72,9 +73,9 @@ fn run_verify_check(verify_cmd: &str, project_root: &Path) -> Result<bool> {
 /// `checkpoint` for claimed dispatchable tasks so later review/diff/close flows
 /// can compare against the attempt baseline.
 pub fn claim(mana_dir: &Path, id: &str, params: ClaimParams) -> Result<ClaimResult> {
-    let unit_path = find_unit_file(mana_dir, id).map_err(|_| anyhow!("Unit not found: {}", id))?;
-    let mut unit =
-        Unit::from_file(&unit_path).with_context(|| format!("Failed to load unit: {}", id))?;
+    let resolved = resolve_unit(mana_dir, id)?;
+    let unit_path = resolved.path;
+    let mut unit = resolved.unit;
 
     if unit.status != Status::Open {
         return Err(anyhow!(

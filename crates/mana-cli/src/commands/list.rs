@@ -76,6 +76,7 @@ pub fn cmd_list(
                 .replace("{title}", &entry.title)
                 .replace("{status}", &format!("{}", entry.status))
                 .replace("{priority}", &format!("P{}", entry.priority))
+                .replace("{handle}", entry.handle.as_deref().unwrap_or(""))
                 .replace("{parent}", entry.parent.as_deref().unwrap_or(""))
                 .replace("{assignee}", entry.assignee.as_deref().unwrap_or(""))
                 .replace("{labels}", &entry.labels.join(","))
@@ -145,9 +146,14 @@ fn render_entry(
 ) {
     let indent = "  ".repeat(depth as usize);
     let (status_indicator, reason_suffix) = get_status_indicator(entry, index);
+    let handle_suffix = entry
+        .handle
+        .as_ref()
+        .map(|handle| format!(" ({handle})"))
+        .unwrap_or_default();
     output.push_str(&format!(
-        "{}{} {}. {}{}\n",
-        indent, status_indicator, entry.id, entry.title, reason_suffix
+        "{}{} {}. {}{}{}\n",
+        indent, status_indicator, entry.id, entry.title, handle_suffix, reason_suffix
     ));
 
     // Render children
@@ -262,6 +268,7 @@ mod tests {
 
     fn make_scoped_entry(id: &str, status: Status) -> IndexEntry {
         IndexEntry {
+            handle: None,
             id: id.to_string(),
             title: "Test".to_string(),
             status,

@@ -179,6 +179,10 @@ fn render_metadata_header(unit: &Unit) -> String {
     // Build metadata details with optional fields
     let mut details = Vec::new();
 
+    if let Some(handle) = &unit.handle {
+        details.push(format!("Handle: {}", handle));
+    }
+
     if let Some(parent) = &unit.parent {
         details.push(format!("Parent: {}", parent));
     }
@@ -366,7 +370,10 @@ fn render_history(history: &[RunRecord], limit: usize) -> String {
 
 /// Format a unit as a one-line summary
 fn format_short(unit: &Unit) -> String {
-    format!("{}. {} [{}]", unit.id, unit.title, unit.status)
+    match &unit.handle {
+        Some(handle) => format!("{}. {} ({}) [{}]", unit.id, unit.title, handle, unit.status),
+        None => format!("{}. {} [{}]", unit.id, unit.title, unit.status),
+    }
 }
 
 #[cfg(test)]
@@ -457,7 +464,7 @@ mod tests {
     fn format_short_test() {
         let unit = Unit::new("42", "My task");
         let formatted = format_short(&unit);
-        assert_eq!(formatted, "42. My task [open]");
+        assert_eq!(formatted, "42. My task (my task) [open]");
     }
 
     #[test]

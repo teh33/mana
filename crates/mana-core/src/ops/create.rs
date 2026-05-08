@@ -121,6 +121,7 @@ pub fn create(mana_dir: &Path, params: CreateParams) -> Result<CreateResult> {
     let slug = title_to_slug(&params.title);
     let mut unit = Unit::new(&unit_id, &params.title);
     unit.slug = Some(slug.clone());
+    unit.ensure_handle();
     unit.description = params.description;
     unit.acceptance = params.acceptance;
     unit.notes = params.notes;

@@ -17,6 +17,7 @@ pub use mana_core::index;
 pub use mana_core::locks;
 pub use mana_core::prompt;
 pub use mana_core::relevance;
+pub use mana_core::resolve;
 pub use mana_core::unit;
 pub use mana_core::util;
 pub use mana_core::worktree;

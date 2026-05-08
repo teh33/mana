@@ -224,7 +224,7 @@ fn insert_unit_tx(tx: &Transaction<'_>, unit: &Unit, metadata: &SourceFileMetada
     tx.execute(
         r#"
         INSERT INTO units (
-            id, title, slug, status, priority, kind, unit_type, feature,
+            id, title, handle, slug, status, priority, kind, unit_type, feature,
             created_at, updated_at, closed_at, close_reason, description, acceptance,
             notes, design, parent, assignee, claimed_by, claimed_at, is_archived,
             verify, verify_fast, fail_first, checkpoint, verify_hash, attempts,
@@ -232,18 +232,19 @@ fn insert_unit_tx(tx: &Transaction<'_>, unit: &Unit, metadata: &SourceFileMetada
             created_by, model, autonomy_disposition, outputs_json, on_fail_json,
             on_close_json, source_path, source_hash, indexed_at
         ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
-            ?9, ?10, ?11, ?12, ?13, ?14,
-            ?15, ?16, ?17, ?18, ?19, ?20, ?21,
-            ?22, ?23, ?24, ?25, ?26, ?27,
-            ?28, ?29, ?30, ?31, ?32,
-            ?33, ?34, ?35, ?36, ?37,
-            ?38, ?39, ?40, ?41
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
+            ?10, ?11, ?12, ?13, ?14, ?15,
+            ?16, ?17, ?18, ?19, ?20, ?21, ?22,
+            ?23, ?24, ?25, ?26, ?27, ?28,
+            ?29, ?30, ?31, ?32, ?33,
+            ?34, ?35, ?36, ?37, ?38,
+            ?39, ?40, ?41, ?42
         )
         "#,
         params![
             unit.id,
             unit.title,
+            unit.handle,
             unit.slug,
             unit.status.to_string(),
             i64::from(unit.priority),

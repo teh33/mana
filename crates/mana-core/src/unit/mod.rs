@@ -46,6 +46,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::handle::generate_handle;
 use crate::util::{atomic_write, validate_unit_id};
 use crate::yaml;
 
@@ -117,6 +118,10 @@ pub struct Unit {
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slug: Option<String>,
+    /// Project-scoped human navigation alias generated from the title.
+    /// This is not canonical identity; `id` remains the stable lookup key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handle: Option<String>,
     pub status: Status,
     #[serde(default = "default_priority")]
     pub priority: u8,
@@ -358,6 +363,8 @@ struct UnitWire {
     title: String,
     #[serde(default)]
     slug: Option<String>,
+    #[serde(default)]
+    handle: Option<String>,
     status: Status,
     #[serde(default = "default_priority")]
     priority: u8,
@@ -474,6 +481,7 @@ impl From<UnitWire> for Unit {
             id: raw.id,
             title: raw.title,
             slug: raw.slug,
+            handle: raw.handle,
             status: raw.status,
             priority: raw.priority,
             created_at: raw.created_at,
@@ -548,6 +556,7 @@ impl Unit {
             id: id_str,
             title: title.into(),
             slug: None,
+            handle: None,
             status: Status::Open,
             priority: 2,
             created_at: now,
@@ -592,6 +601,21 @@ impl Unit {
             autonomy_disposition: None,
             model: None,
         })
+        .map(|mut unit| {
+            unit.ensure_handle();
+            unit
+        })
+    }
+
+    /// Fill in a generated human handle when this unit does not already have one.
+    pub fn ensure_handle(&mut self) {
+        if self
+            .handle
+            .as_ref()
+            .is_none_or(|handle| handle.trim().is_empty())
+        {
+            self.handle = generate_handle(&self.title);
+        }
     }
 
     /// Create a new unit with sensible defaults.
@@ -1156,6 +1180,7 @@ verify: cargo test
             id: "3.2.1".to_string(),
             title: "Implement parser".to_string(),
             slug: None,
+            handle: None,
             status: Status::InProgress,
             priority: 1,
             created_at: now,

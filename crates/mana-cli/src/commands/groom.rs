@@ -475,6 +475,7 @@ mod tests {
             id: id.to_string(),
             title: title.to_string(),
             slug: None,
+            handle: None,
             status,
             priority: 1,
             created_at: now,

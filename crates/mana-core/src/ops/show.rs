@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::discovery::{find_archived_unit, find_unit_file};
+use crate::discovery::find_archived_unit;
+use crate::resolve::resolve_unit;
 use crate::unit::Unit;
 
 /// Result of loading a unit.
@@ -13,14 +14,19 @@ pub struct GetResult {
 
 /// Load a unit by ID and return its full data.
 pub fn get(mana_dir: &Path, id: &str) -> Result<GetResult> {
-    let unit_path = find_unit_file(mana_dir, id)
-        .or_else(|_| find_archived_unit(mana_dir, id))
-        .with_context(|| format!("Unit not found: {}", id))?;
-    let unit =
-        Unit::from_file(&unit_path).with_context(|| format!("Failed to load unit: {}", id))?;
+    let result = resolve_unit(mana_dir, id).or_else(|_| {
+        let unit_path =
+            find_archived_unit(mana_dir, id).with_context(|| format!("Unit not found: {}", id))?;
+        let unit =
+            Unit::from_file(&unit_path).with_context(|| format!("Failed to load unit: {}", id))?;
+        Ok::<_, anyhow::Error>(crate::resolve::ResolvedUnit {
+            unit,
+            path: unit_path,
+        })
+    })?;
     Ok(GetResult {
-        unit,
-        path: unit_path,
+        unit: result.unit,
+        path: result.path,
     })
 }
 

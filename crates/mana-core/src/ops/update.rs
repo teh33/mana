@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 
-use crate::discovery::find_unit_file;
 use crate::hooks::{execute_hook, HookEvent};
 use crate::index::{Index, LockedIndex};
+use crate::resolve::resolve_unit;
 use crate::unit::{validate_priority, Unit};
 use crate::util::parse_status;
 
@@ -39,10 +39,9 @@ pub fn update(mana_dir: &Path, id: &str, params: UpdateParams) -> Result<UpdateR
         validate_priority(p)?;
     }
 
-    let unit_path =
-        find_unit_file(mana_dir, id).with_context(|| format!("Unit not found: {}", id))?;
-    let mut unit =
-        Unit::from_file(&unit_path).with_context(|| format!("Failed to load unit: {}", id))?;
+    let resolved = resolve_unit(mana_dir, id)?;
+    let unit_path = resolved.path;
+    let mut unit = resolved.unit;
 
     let project_root = mana_dir
         .parent()

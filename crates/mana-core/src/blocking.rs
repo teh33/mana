@@ -136,6 +136,7 @@ mod tests {
 
     fn make_entry(id: &str) -> IndexEntry {
         IndexEntry {
+            handle: None,
             id: id.to_string(),
             title: format!("Unit {}", id),
             status: Status::Open,

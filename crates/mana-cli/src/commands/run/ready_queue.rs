@@ -1253,6 +1253,7 @@ mod tests {
         requires: Vec<&str>,
     ) -> IndexEntry {
         IndexEntry {
+            handle: None,
             id: id.to_string(),
             title: format!("Unit {}", id),
             status,

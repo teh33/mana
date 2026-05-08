@@ -8,8 +8,7 @@ use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::discovery::find_unit_file;
-use crate::unit::Unit;
+use crate::resolve::resolve_unit;
 
 /// Result of running a verify command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,9 +36,7 @@ pub struct VerifyResult {
 ///
 /// If the unit has no verify command, returns `Ok(None)`.
 pub fn run_verify(mana_dir: &Path, id: &str) -> Result<Option<VerifyResult>> {
-    let unit_path = find_unit_file(mana_dir, id).map_err(|_| anyhow!("Unit not found: {}", id))?;
-    let unit =
-        Unit::from_file(&unit_path).with_context(|| format!("Failed to load unit: {}", id))?;
+    let unit = resolve_unit(mana_dir, id)?.unit;
 
     let verify_cmd = match &unit.verify {
         Some(cmd) if !cmd.trim().is_empty() => cmd.clone(),
