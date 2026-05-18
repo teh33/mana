@@ -1,6 +1,6 @@
 [package]
 name = "mana-pool"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.85"
 description = "Resource-aware dispatch engine for mana agents"
@@ -12,7 +12,7 @@ keywords = ["ai-agents", "orchestration", "dispatch", "coordination"]
 categories = ["development-tools"]
 
 [dependencies]
-mana-core = { path = "../mana-core", version = "0.3.1" }
+mana-core = { path = "../mana-core", version = "0.3.2" }
 anyhow = "1"
 sysinfo = "0.33"
 tempfile = "3"
