@@ -1,31 +1,19 @@
 /target
-
-# Track migrated mana graph; ignore local runtime logs/state.
-.mana/agent_history.jsonl
-.mana/archive.yaml
-.mana/index.yaml
-.mana/index.lock
-.mana/runs/
-.mana/index/
-.mana/tmp/
-.mana/cache/
-
+# Local mana work graph/runtime state. Do not publish project-private work state.
+.mana/
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
-
 # Editor directories
 .idea/
 .vscode/
 .vim/
-
 # Backup files
 *.swp
 *.bak
 *~
 *.orig
-
 # Dev tools
 .vibecheck/
 .claude/
@@ -33,6 +21,5 @@ tools/
 DESIGN-*.md
 VIBES.md
 VIBECHECK.md
-
 # Archived local code not published as part of workspace
 .archive/
